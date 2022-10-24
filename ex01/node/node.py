@@ -63,6 +63,20 @@ class Node:
                 self.received_messages.put(message)
             except TypeError:  # debug
                 print(f'Could not unpickle data: {data}')
+                
+    def broadcast_victory(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.sendto(Message(), ('255.255.255.255', self.communication_port))
+
+            
+                
+    def send_msg(self, id, msg):
+        """
+        Sends message over UDP to node with given id
+        """
+        with socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.sendto(msg, (f'node-{id}', self.communication_port))
 
     def start(self):
         """
@@ -76,3 +90,29 @@ class Node:
             target=self.listener_thread_main
         )
         self.listener_thread.start()
+
+        self.establish_master()
+
+    def establish_master(self):
+        # - If P has the highest process ID, it sends a Victory message to all other processes and becomes the new Coordinator.
+        # Otherwise, P broadcasts an Election message to all other processes with higher process IDs than itself.
+        # - If P receives no Answer after sending an Election message, then it broadcasts a Victory message to all other processes
+        # and becomes the Coordinator.
+        # - If P receives an Answer from a process with a higher ID, it sends no further messages for this election
+        # and waits for a Victory message. (If there is no Victory message after a period of time, it restarts 
+        # the process at the beginning.)
+        # - If P receives an Election message from another process with a lower ID it sends an Answer message 
+        # back and if it has not already started an election, it starts the election process at the beginning, 
+        # by sending an Election message to higher-numbered processes.
+        # - If P receives a Coordinator message, it treats the sender as the coordinator.
+        
+        if self.id == self.id_limit:
+            self.broadcast_victory()
+        
+        # Broadcast election message to all nodes with higher id
+        for node_id in range(self.id + 1, self.id_limit):
+            self.send_msg(node_id, Message('election', self.id))
+            
+        master_established = False
+        while not master_established:
+            
