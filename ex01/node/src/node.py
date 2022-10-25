@@ -13,7 +13,8 @@ class NodeColor(Enum):
 
 
 MAX_MESSAGE_LEN = 4096  # 4K will suffice
-HEARTBEAT_INTERVAL_MS = 5000  # 5 seconds
+MAX_ELECTION_TIME = 10  # 10 seconds
+HEARTBEAT_INTERVAL_S = 5  # 5 seconds
 
 
 class Message:
@@ -47,13 +48,13 @@ class Node:
 
         # Queue for messages received from other nodes
         self.received_messages = queue.Queue(maxsize=4096)
-        self.send_messages = queue.Queue(maxsize=4096)
         self.listener_thread = None  # listens to messages and adds them to the queue
         self.sender_thread = None
 
     def listener_thread_main(self):
         # Start listening
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        print(f'Listening on port {self.communication_port}')
         while True:
             data = sock.recv(MAX_MESSAGE_LEN)
             try:
@@ -115,4 +116,7 @@ class Node:
             
         master_established = False
         while not master_established:
-            
+            message = self.received_messages.get(block=True, timeout=MAX_ELECTION_TIME)
+            print(f'Got message: {message}')
+            exit(0)
+
