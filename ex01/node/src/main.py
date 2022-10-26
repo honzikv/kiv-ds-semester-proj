@@ -1,17 +1,18 @@
 import os
+import argparse
 from node import Node
 
+# Local development without docker for easier testing
+localhost = '127.0.0.1'
+local_addrs = [(localhost, 2333), (localhost, 2334)]
 
 if __name__ == '__main__':
 
-    # Parse environment variables
-    port = int(os.environ.get('PORT', 1337))
-    id_limit = int(os.environ.get('ID_LIMIT', 10))
-    host_name = os.environ.get('HOSTNAME')
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('--node_addr', type=int, required=True, help='Address of this node')
+    args = argparser.parse_args()
 
-    node = Node(
-        communication_port=port,
-        n_nodes=id_limit,
-        hostname=host_name
-    ).run()
+    node = Node(node_addr=local_addrs[args.node_addr], node_addrs=local_addrs)
+    node.run()
+
 

@@ -63,11 +63,13 @@ class Node:
         """
         Main function for the listener thread
         """
-
-        print(f'Listening on addr: {self.addr}')
-        while True:
-            with socket.socket() as sock:
-                data = sock.recv(MAX_MESSAGE_LEN)
+        with socket.socket() as sock:
+            sock.bind(("", self.addr[1]))
+            sock.listen(2)
+            while True:
+                # sock.listen()
+                print(f'Listening on addr: {self.addr}')
+                data = sock.recvfrom(MAX_MESSAGE_LEN)
                 try:
                     # Unpickle the pickle 🥒
                     message = pickle.loads(data)
@@ -95,6 +97,7 @@ class Node:
         # Create new thread that will read messages from the socket and add them to the queue
         self.listener_thread = threading.Thread(target=self.listener_thread_main)
         self.listener_thread.start()
+        time.sleep(10)
         self.node_main()
 
     def read_next_message_from_queue(self, timeout_secs=None) -> Message:
@@ -212,7 +215,6 @@ class Node:
     def assign_colors(self):
         # Calculate number of nodes that should be green - 1/3 of all nodes including master
         n_green = len(self.alive_nodes) / 3
-        n_red = len(self.alive_nodes) - n_green
 
         self.change_color(NodeColor.GREEN)
         n_green -= 1
@@ -226,6 +228,7 @@ class Node:
                 self.send_message(node, 'color', NodeColor.GREEN)
                 continue
 
+            # The rest is colored red
             self.send_message(node, 'color', NodeColor.RED)
 
         self.uncolored_nodes = set(nodes)
@@ -245,3 +248,21 @@ class Node:
 
             if len(self.uncolored_nodes) == 0:
                 return True
+
+    def slave_main(self):
+        print('Waiting for master to assign colors ...')
+
+        while True:
+            message = self.read_next_message_from_queue(timeout_secs=COLOR_ASSIGNMENT_TIMEOUT_SECS)
+            if message is None:
+                self.master_id = None
+                return
+
+            if message.key == 'color':
+                self.change_color(message.value)
+                self.send_message(self.master_id, 'color', self.color)
+                break
+
+            if message.key == 'heartbeat' and message.value == 'request':
+                self.send_message(message.sender_id, 'heartbeat', 'response')
+
