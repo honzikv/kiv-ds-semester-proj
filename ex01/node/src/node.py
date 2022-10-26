@@ -63,11 +63,9 @@ class Node:
         """
         Main function for the listener thread
         """
-        with socket.socket() as sock:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.bind(("", self.addr[1]))
-            sock.listen(2)
             while True:
-                # sock.listen()
                 print(f'Listening on addr: {self.addr}')
                 data = sock.recvfrom(MAX_MESSAGE_LEN)
                 try:
@@ -84,7 +82,7 @@ class Node:
         """
 
         message = Message(key, value, self.addr)
-        with socket.socket() as sock:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.setblocking(False)
             sock.sendto(pickle.dumps(message), self.node_addrs[node_id])
 

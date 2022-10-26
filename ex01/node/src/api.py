@@ -12,8 +12,11 @@ app = fastapi.FastAPI()
 node: Node = None
 
 
-@app.get("/")
+@app.post("/")
 def send_message(body: Dict):
     node.received_messages.put(Message(**body))
 
 
+@app.post("/health")
+def health():
+    return {}  # Actually 200 is sufficient
