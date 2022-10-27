@@ -43,7 +43,7 @@ def color(body: Dict):
     received_messages.put(message)
 
 
-@app.get("/health")
+@app.get("/healthcheck")
 def health():
     return {'hello': 'world'}  # 200 is sufficient
 
@@ -87,7 +87,6 @@ def main():
         # Easiest way to synchronize the API and thread itself is to use a "health check endpoint" that we try
         # reaching until we get a 200 response
         # This would most probably not be optimal for a real production system but will suffice for this
-        print('Starting node thread ...')
         n_tries = 10
         while True:
             if n_tries == 0:
@@ -95,7 +94,7 @@ def main():
                 exit(1)
 
             time.sleep(REQ_INTERVAL)
-            res = requests.get(f'{api_url}/health')  # this will block until conn is established
+            res = requests.get(f'{api_url}/healthcheck')  # this will block until conn is established
 
             if res.status_code != 200:
                 print('Waiting for api to start')

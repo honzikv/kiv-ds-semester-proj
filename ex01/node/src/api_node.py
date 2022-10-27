@@ -61,7 +61,7 @@ class Node:
         try:
             requests.post(f'{node_addr}/{endpoint}',
                           json={'value': value, 'sender_id': self.id},
-                          timeout=ELECTION_TIMEOUT)
+                          timeout=HEARTBEAT_TIMEOUT_SECS)
         except Exception as ex:
             print(ex)
 
@@ -90,7 +90,6 @@ class Node:
         Starts the node
         """
 
-        print(f'Starting node: {self.addr}')
         while True:
             if self.master_id is None:
                 self.establish_master_conn()
@@ -219,7 +218,7 @@ class Node:
         random.shuffle(nodes)
 
         for idx, node_id in enumerate(nodes):
-            if idx < n_green:
+            if idx < n_green:  # assign green color
                 self.send_message(self.node_addrs[node_id], 'color', 'green')
                 continue
 
@@ -277,3 +276,10 @@ class Node:
             if message is None:
                 print('No heartbeat from master, dying...')
                 exit(4)
+
+            if message.key == 'heartbeat' and message.value == 'request':
+                self.send_message(
+                    node_addr=self.node_addrs[message.sender_id],
+                    endpoint='heartbeat',
+                    value='response',
+                )
