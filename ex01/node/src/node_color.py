@@ -8,3 +8,4 @@ class NodeColor(Enum):
     RED = 'red',
     GREEN = 'green',
     INIT = 'init'
+    ELECTING = 'electing'

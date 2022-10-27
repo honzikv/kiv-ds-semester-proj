@@ -7,7 +7,7 @@ from node_color import NodeColor
 
 from message import Message
 
-REQ_TIMEOUT = 30
+ELECTION_TIMEOUT = 30
 HEARTBEAT_TIMEOUT_SECS = 10
 COLOR_ASSIGNMENT_TIMEOUT_SECS = 20  # 20 seconds
 received_messages = queue.Queue(maxsize=4096)
@@ -15,7 +15,8 @@ received_messages = queue.Queue(maxsize=4096)
 
 def read_next_message_from_queue(timeout_secs=None) -> Message | None:
     """
-    Reads next message from queue, returning either the read message or none if the timeout is reached
+    Reads next message from queue, returning either the read message or none if the timeout is reached. If timeout is
+    None this function is nonblocking, otherwise it blocks until a message is received or the timeout is reached.
     Args:
         timeout_secs (int): timeout in seconds, None sets this to 0
     """
@@ -29,12 +30,11 @@ def read_next_message_from_queue(timeout_secs=None) -> Message | None:
 class Node:
 
     def __init__(self, node_addrs, node_addr) -> None:
-        global a
         self.node_addrs = node_addrs
         self.addr = node_addr
 
-        # Node addresses are simple URLS and are passed to each node
-        # sorted alphabetically so we can easily derive any node id
+        # Node addresses are simple URLs that are passed to each node
+        # sorted alphabetically so we can easily derive node id
         # as index in the node_addrs array
         self.id = self.node_addrs.index(self.addr)
         self.max_node_id = len(self.node_addrs) - 1
@@ -55,7 +55,7 @@ class Node:
         try:
             requests.post(f'{node_addr}/{endpoint}',
                           json={'value': value, 'sender_id': self.id},
-                          timeout=REQ_TIMEOUT)
+                          timeout=ELECTION_TIMEOUT)
         except Exception as ex:
             print(ex)
 
@@ -89,33 +89,37 @@ class Node:
             self.slave_loop()
 
     def establish_master_conn(self):
+        """
+        Begins to establish master in the network.
+        """
         print('Attempting to establish new master')
         # If we are the highest id in the cluster we must be the master
         # So just broadcast to all other nodes to surrender
         if self.id == self.max_node_id:
-            print('This node is the highest id, declaring self as master')
             self.declare_self_as_master()
-            return  # TODO cannot return instead must wait for election results
-        # Else send election message to all other nodes
-        for node_id in range(self.max_node_id):
-            if node_id == self.id:
-                continue
+        else:
+            # Else send election message to all other nodes
+            for node_id in range(self.max_node_id):
+                if node_id == self.id:
+                    continue
 
-            print('Sending election message to node: ', node_id)
-            node_addr = self.node_addrs[node_id]
-            self.send_message(
-                endpoint='election',
-                node_addr=node_addr,
-                value=self.id
-            )
+                print('Sending election message to node: ', node_id)
+                node_addr = self.node_addrs[node_id]
+                self.send_message(
+                    endpoint='election',
+                    node_addr=node_addr,
+                    value=self.id
+                )
 
         self.wait_for_election_results()
 
     def wait_for_election_results(self):
-        # Begin listening for responses
+        """
+        Waits for election results, this must be called even in node that knows they are the master
+        """
         print('Waiting for election results')
         while True:
-            message = read_next_message_from_queue(timeout_secs=REQ_TIMEOUT)
+            message = read_next_message_from_queue(timeout_secs=ELECTION_TIMEOUT)
             if message is None:
                 print('No election results received, declaring self as master')
                 self.declare_self_as_master()
@@ -124,6 +128,8 @@ class Node:
             if message.key != 'election':
                 received_messages.put(message)  # Add message back to queue
                 continue
+
+            print('Received election message from node: ', message.sender_id)
 
             if message.value == 'victory':
                 # We have received a victory message from another node
