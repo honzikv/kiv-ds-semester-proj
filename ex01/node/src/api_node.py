@@ -2,6 +2,7 @@ import logging
 import queue
 import random
 import sys
+import time
 
 import requests
 
@@ -154,30 +155,6 @@ class Node:
                     value='surrender',
                 )
 
-    def master_loop(self):
-        print('Coordinating distributed operation (coloring the nodes) ...')
-        self.find_active_nodes()
-        self.assign_colors()
-        if self.colors_assigned():
-            print('All nodes have been assigned a color')
-            print(self.node_colors)
-
-        while True:
-            message = read_next_message_from_queue(timeout_secs=HEARTBEAT_TIMEOUT_SECS)
-            if message is None:
-                print('Slaves are all dead, dying...')
-                exit(4)
-
-            if message.key != 'heartbeat':
-                continue
-
-            if message.value == 'request':
-                self.send_message(
-                    node_addr=self.node_addrs[message.sender_id],
-                    endpoint='heartbeat',
-                    value='response',
-                )
-
     def find_active_nodes(self):
         print('Finding active nodes...')
         self.alive_nodes.clear()
@@ -244,6 +221,16 @@ class Node:
                 self.node_colors[message.sender_id] = message.value
                 self.uncolored_nodes.remove(message.sender_id)
 
+    def master_loop(self):
+        print('Coordinating distributed operation (coloring the nodes) ...')
+        self.find_active_nodes()
+        self.assign_colors()
+        if self.colors_assigned():
+            print('All nodes have been assigned a color')
+            print(self.node_colors)
+
+        self.heartbeat_loop(lambda: self.broadcast('heartbeat', 'request'))
+
     def slave_loop(self):
         print('Entering slave mode ...')
 
@@ -269,12 +256,21 @@ class Node:
                     value='response',
                 )
 
-        # Sent heartbeats to the master
+        # I.e. something to keep the nodes running and talking to each other, ...
+        self.heartbeat_loop(lambda: self.send_message(
+            node_addr=self.node_addrs[self.master_id],
+            endpoint='heartbeat',
+            value='request',
+        ))
+
+    def heartbeat_loop(self, send_message_fn):
+        send_message_fn()
+        last_message_at = time.time()
         while True:
             message = read_next_message_from_queue(timeout_secs=HEARTBEAT_TIMEOUT_SECS)
             if message is None:
-                print('No heartbeat from master, dying...')
-                exit(4)
+                time.sleep(HEARTBEAT_TIMEOUT_SECS / 4)
+                continue
 
             if message.key == 'heartbeat' and message.value == 'request':
                 self.send_message(
@@ -282,3 +278,7 @@ class Node:
                     endpoint='heartbeat',
                     value='response',
                 )
+
+            if time.time() - last_message_at > HEARTBEAT_TIMEOUT_SECS / 2:
+                send_message_fn()
+                last_message_at = time.time()

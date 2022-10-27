@@ -17,7 +17,6 @@ app = fastapi.FastAPI()
 
 
 def build_message(body: Dict, endpoint):
-    print(f"Received election message from {body['sender_id']}")
     return Message(
         key=endpoint,
         value=body['value'],
