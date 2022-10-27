@@ -12,6 +12,7 @@ HEARTBEAT_TIMEOUT_SECS = 10
 COLOR_ASSIGNMENT_TIMEOUT_SECS = 20  # 20 seconds
 received_messages = queue.Queue(maxsize=4096)
 
+
 def read_next_message_from_queue(timeout_secs=None) -> Message | None:
     """
     Reads next message from queue, returning either the read message or none if the timeout is reached
@@ -53,8 +54,8 @@ class Node:
         print('Sending message to node: ', node_addr)
         try:
             requests.post(f'{node_addr}/{endpoint}',
-                           json={'value': value, 'sender_id': self.id},
-                           timeout=REQ_TIMEOUT)
+                          json={'value': value, 'sender_id': self.id},
+                          timeout=REQ_TIMEOUT)
         except Exception as ex:
             print(ex)
 
@@ -91,12 +92,10 @@ class Node:
         print('Attempting to establish new master')
         # If we are the highest id in the cluster we must be the master
         # So just broadcast to all other nodes to surrender
-        print(f'Node id = {self.id}, max_node id = {self.max_node_id}')
         if self.id == self.max_node_id:
             print('This node is the highest id, declaring self as master')
             self.declare_self_as_master()
             return
-        
         # Else send election message to all other nodes
         for node_id in range(self.max_node_id):
             if node_id == self.id:
@@ -110,7 +109,7 @@ class Node:
                 value=self.id
             )
 
-            self.wait_for_election_results()
+        self.wait_for_election_results()
 
     def wait_for_election_results(self):
         # Begin listening for responses
@@ -121,6 +120,7 @@ class Node:
             if message is None:
                 print('No election results received, declaring self as master')
                 self.declare_self_as_master()
+                break
 
             if message.key != 'election':
                 print('Received non-election message, ignoring')

@@ -53,6 +53,7 @@ api_url = f'http://{hostname}:{port}'
 def run_node():
     # Dumbest way to synchronize thread with the api is just to send GET request until it 
     # receives 200
+    print('Starting node thread ...')
     while True:
         time.sleep(REQ_INTERVAL)
         res = requests.get(f'{api_url}/health')  # this will block until conn is established
