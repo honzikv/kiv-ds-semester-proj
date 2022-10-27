@@ -31,6 +31,18 @@ def send_message(body: Dict):
     received_messages.put(message)
 
 
+@app.post('/heartbeat')
+def heartbeat(body: Dict):
+    message = build_message(body, 'heartbeat')
+    received_messages.put(message)
+
+
+@app.post('/color')
+def color(body: Dict):
+    message = build_message(body, 'color')
+    received_messages.put(message)
+
+
 @app.get("/health")
 def health():
     return {'hello': 'world'}  # 200 is sufficient
@@ -53,7 +65,7 @@ def main():
     if os.getenv('docker') is None:
         # Local development without docker for testing purposes
         localhost = '127.0.0.1'
-        local_addrs = [(localhost, 2333), (localhost, 2334)]
+        local_addrs = [(localhost, 2333), (localhost, 2334), (localhost, 2335)]
 
         argparser = argparse.ArgumentParser()
         # This is index to the array - i.e. 0 or 1, etc.
