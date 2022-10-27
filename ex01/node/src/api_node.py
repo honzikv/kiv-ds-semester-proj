@@ -1,7 +1,8 @@
 import queue
 import random
+import time
 
-import grequests
+import requests
 from node_color import NodeColor
 
 from message import Message
@@ -10,7 +11,6 @@ REQ_TIMEOUT = 3
 HEARTBEAT_TIMEOUT_SECS = 10
 COLOR_ASSIGNMENT_TIMEOUT_SECS = 20  # 20 seconds
 received_messages = queue.Queue(maxsize=4096)
-
 
 def read_next_message_from_queue(timeout_secs=None) -> Message | None:
     """
@@ -28,13 +28,14 @@ def read_next_message_from_queue(timeout_secs=None) -> Message | None:
 class Node:
 
     def __init__(self, node_addrs, node_addr) -> None:
+        global a
         self.node_addrs = node_addrs
         self.addr = node_addr
 
         # Node addresses are simple URLS and are passed to each node
         # sorted alphabetically so we can easily derive any node id
         # as index in the node_addrs array
-        self.id = self.node_addrs.index(self.node_addr)
+        self.id = self.node_addrs.index(self.addr)
         self.max_node_id = len(self.node_addrs) - 1
 
         self.color = NodeColor.INIT
@@ -49,8 +50,9 @@ class Node:
         print(f'Changing color from {self.color} to {to}')
 
     def send_message(self, node_addr: str, endpoint: str, value):
+        print('Sending message to node: ', node_addr)
         try:
-            grequests.post(f'{node_addr}/{endpoint}',
+            requests.post(f'{node_addr}/{endpoint}',
                            json={'value': value, 'sender_id': self.id},
                            timeout=REQ_TIMEOUT)
         except Exception as ex:
@@ -87,18 +89,20 @@ class Node:
 
     def establish_master_conn(self):
         print('Attempting to establish new master')
-
         # If we are the highest id in the cluster we must be the master
         # So just broadcast to all other nodes to surrender
+        print(f'Node id = {self.id}, max_node id = {self.max_node_id}')
         if self.id == self.max_node_id:
+            print('This node is the highest id, declaring self as master')
             self.declare_self_as_master()
             return
-
+        
         # Else send election message to all other nodes
         for node_id in range(self.max_node_id):
             if node_id == self.id:
                 continue
 
+            print('Sending election message to node: ', node_id)
             node_addr = self.node_addrs[node_id]
             self.send_message(
                 endpoint='election',
@@ -110,13 +114,16 @@ class Node:
 
     def wait_for_election_results(self):
         # Begin listening for responses
+        print('Waiting for election results')
         while True:
             message = read_next_message_from_queue(timeout_secs=REQ_TIMEOUT)
-
+            print('Received message: ', message)
             if message is None:
+                print('No election results received, declaring self as master')
                 self.declare_self_as_master()
 
             if message.key != 'election':
+                print('Received non-election message, ignoring')
                 continue
 
             if message.value == 'victory':
@@ -131,6 +138,7 @@ class Node:
                 continue
 
             if int(message.value) < self.id:
+                print('Found node with lower id, sending surrender order.')
                 self.send_message(
                     node_addr=self.node_addrs[message.sender_id],
                     endpoint='election',
