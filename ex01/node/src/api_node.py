@@ -7,7 +7,7 @@ from node_color import NodeColor
 
 from message import Message
 
-REQ_TIMEOUT = 3
+REQ_TIMEOUT = 30
 HEARTBEAT_TIMEOUT_SECS = 10
 COLOR_ASSIGNMENT_TIMEOUT_SECS = 20  # 20 seconds
 received_messages = queue.Queue(maxsize=4096)
@@ -116,7 +116,6 @@ class Node:
         print('Waiting for election results')
         while True:
             message = read_next_message_from_queue(timeout_secs=REQ_TIMEOUT)
-            print('Received message: ', message)
             if message is None:
                 print('No election results received, declaring self as master')
                 self.declare_self_as_master()
