@@ -95,7 +95,7 @@ class Node:
         if self.id == self.max_node_id:
             print('This node is the highest id, declaring self as master')
             self.declare_self_as_master()
-            return
+            return  # TODO cannot return instead must wait for election results
         # Else send election message to all other nodes
         for node_id in range(self.max_node_id):
             if node_id == self.id:
@@ -122,7 +122,7 @@ class Node:
                 break
 
             if message.key != 'election':
-                print('Received non-election message, ignoring')
+                received_messages.put(message)  # Add message back to queue
                 continue
 
             if message.value == 'victory':
