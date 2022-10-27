@@ -52,6 +52,7 @@ class Node:
         self.alive_nodes = set()
         self.node_colors = {}
         self.uncolored_nodes = set()
+        self.surrendered = False  # whether the node surrendered claim to be master
 
     def change_color(self, to):
         print(f'NODE {self.addr} Changing color from {self.color} to {to}')
@@ -63,7 +64,8 @@ class Node:
                           json={'value': value, 'sender_id': self.id},
                           timeout=HEARTBEAT_TIMEOUT_SECS)
         except Exception as ex:
-            print(ex)
+            pass
+            # print(ex)
 
     def broadcast(self, endpoint, value):
         """
@@ -80,6 +82,9 @@ class Node:
             )
 
     def declare_self_as_master(self):
+        if self.master:
+            return
+
         self.master = True
         self.master_id = self.id
         print(f'This node {self.addr} is the master now')
@@ -129,7 +134,8 @@ class Node:
         while True:
             message = read_next_message_from_queue(timeout_secs=ELECTION_TIMEOUT)
             if message is None:
-                self.declare_self_as_master()
+                if not self.surrendered:
+                    self.declare_self_as_master()
                 break
 
             if message.key != 'election':
@@ -145,6 +151,7 @@ class Node:
             if message.value == 'surrender':
                 # We have received surrender message from another node that has higher id
                 print('Found node with higher id, surrendering...')
+                self.surrendered = True
                 continue
 
             if int(message.value) < self.id:
@@ -229,7 +236,11 @@ class Node:
             print('All nodes have been assigned a color')
             print(self.node_colors)
 
-        self.heartbeat_loop(lambda: self.broadcast('heartbeat', 'request'))
+        def send_msg():
+            print('BEEP slaves')
+            self.broadcast('heartbeat', 'request')
+
+        self.heartbeat_loop(send_msg)
 
     def slave_loop(self):
         print('Entering slave mode ...')
@@ -237,8 +248,8 @@ class Node:
         while True:
             message = read_next_message_from_queue(timeout_secs=COLOR_ASSIGNMENT_TIMEOUT_SECS)
             if message is None:
-                self.master_id = None
-                return
+                time.sleep(HEARTBEAT_TIMEOUT_SECS / 2)
+                continue
 
             if message.key == 'color':
                 self.change_color(message.value)
@@ -256,29 +267,37 @@ class Node:
                     value='response',
                 )
 
+        def send_msg():
+            print('BEEP master')
+            self.send_message(
+                node_addr=self.node_addrs[self.master_id],
+                endpoint='heartbeat',
+                value='request',
+            )
+
         # I.e. something to keep the nodes running and talking to each other, ...
-        self.heartbeat_loop(lambda: self.send_message(
-            node_addr=self.node_addrs[self.master_id],
-            endpoint='heartbeat',
-            value='request',
-        ))
+        self.heartbeat_loop(send_msg)
 
     def heartbeat_loop(self, send_message_fn):
         send_message_fn()
         last_message_at = time.time()
         while True:
             message = read_next_message_from_queue(timeout_secs=HEARTBEAT_TIMEOUT_SECS)
+
+            if time.time() - last_message_at > HEARTBEAT_TIMEOUT_SECS / 2:
+                send_message_fn()
+                last_message_at = time.time()
+
             if message is None:
                 time.sleep(HEARTBEAT_TIMEOUT_SECS / 4)
                 continue
 
             if message.key == 'heartbeat' and message.value == 'request':
+                print('BOOP')
                 self.send_message(
                     node_addr=self.node_addrs[message.sender_id],
                     endpoint='heartbeat',
                     value='response',
                 )
 
-            if time.time() - last_message_at > HEARTBEAT_TIMEOUT_SECS / 2:
-                send_message_fn()
-                last_message_at = time.time()
+

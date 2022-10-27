@@ -16,6 +16,8 @@ REQ_INTERVAL = 1  # s
 app = fastapi.FastAPI()
 
 
+# TODO docker + vagrant + fix stdout + readme
+
 def build_message(body: Dict, endpoint):
     return Message(
         key=endpoint,
