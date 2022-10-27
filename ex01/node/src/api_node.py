@@ -6,19 +6,18 @@ import sys
 import requests
 
 from message import Message
+import logging
 
-ELECTION_TIMEOUT = 30
-HEARTBEAT_TIMEOUT_SECS = 10
-COLOR_ASSIGNMENT_TIMEOUT_SECS = 60  # 20 seconds
+# Disable uvicorn logging for readability
+uvicorn_error = logging.getLogger("uvicorn.error")
+uvicorn_error.disabled = True
+uvicorn_access = logging.getLogger("uvicorn.access")
+uvicorn_access.disabled = True
+
+ELECTION_TIMEOUT = 10
+HEARTBEAT_TIMEOUT_SECS = 4
+COLOR_ASSIGNMENT_TIMEOUT_SECS = 30
 received_messages = queue.Queue(maxsize=4096)
-
-_logger = logging.getLogger(__name__)
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-_logger.addHandler(console_handler)
-
-
-# print = _logger.info
 
 
 def read_next_message_from_queue(timeout_secs=None) -> Message | None:
