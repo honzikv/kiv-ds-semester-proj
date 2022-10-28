@@ -61,6 +61,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
           'NODE_IP' => node_ip_address,
           'PORT' => APP_NODES[:port],
           'N_NODES' => 1 + APP_NODES_COUNT
+          'docker' => 'yes'
         }
       end
       s.vm.post_up_message = "Node #{node_name} up and running. You can access the node with 'vagrant ssh #{node_name}'}"

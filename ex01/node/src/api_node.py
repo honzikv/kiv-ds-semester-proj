@@ -1,21 +1,30 @@
+import logging
 import queue
 import random
+import sys
 import time
 
 import requests
-from node_color import NodeColor
 
 from message import Message
+import logging
 
-REQ_TIMEOUT = 30
-HEARTBEAT_TIMEOUT_SECS = 10
-COLOR_ASSIGNMENT_TIMEOUT_SECS = 20  # 20 seconds
+# Disable uvicorn logging for readability
+uvicorn_error = logging.getLogger("uvicorn.error")
+uvicorn_error.disabled = True
+uvicorn_access = logging.getLogger("uvicorn.access")
+uvicorn_access.disabled = True
+
+ELECTION_TIMEOUT = 10
+HEARTBEAT_TIMEOUT_SECS = 4
+COLOR_ASSIGNMENT_TIMEOUT_SECS = 30
 received_messages = queue.Queue(maxsize=4096)
 
 
 def read_next_message_from_queue(timeout_secs=None) -> Message | None:
     """
-    Reads next message from queue, returning either the read message or none if the timeout is reached
+    Reads next message from queue, returning either the read message or none if the timeout is reached. If timeout is
+    None this function is nonblocking, otherwise it blocks until a message is received or the timeout is reached.
     Args:
         timeout_secs (int): timeout in seconds, None sets this to 0
     """
@@ -29,54 +38,63 @@ def read_next_message_from_queue(timeout_secs=None) -> Message | None:
 class Node:
 
     def __init__(self, node_addrs, node_addr) -> None:
-        global a
         self.node_addrs = node_addrs
         self.addr = node_addr
 
-        # Node addresses are simple URLS and are passed to each node
-        # sorted alphabetically so we can easily derive any node id
+        # Node addresses are simple URLs that are passed to each node
+        # sorted alphabetically so we can easily derive node id
         # as index in the node_addrs array
         self.id = self.node_addrs.index(self.addr)
         self.max_node_id = len(self.node_addrs) - 1
-
-        self.color = NodeColor.INIT
+        self.color = 'init'
         self.master = False
         self.master_id = None
         self.alive_nodes = set()
         self.node_colors = {}
         self.uncolored_nodes = set()
+        self.surrendered = False  # whether the node surrendered claim to be master
 
     def change_color(self, to):
+        print(f'NODE {self.addr} Changing color from {self.color} to {to}')
         self.color = to
-        print(f'Changing color from {self.color} to {to}')
 
     def send_message(self, node_addr: str, endpoint: str, value):
-        print('Sending message to node: ', node_addr)
         try:
             requests.post(f'{node_addr}/{endpoint}',
                           json={'value': value, 'sender_id': self.id},
-                          timeout=REQ_TIMEOUT)
+                          timeout=HEARTBEAT_TIMEOUT_SECS)
         except Exception as ex:
-            print(ex)
+            pass
+            # print(ex)
+
+    def broadcast(self, endpoint, value):
+        """
+        Broadcasts a message to all nodes
+        """
+        for node_id in range(self.max_node_id):
+            if node_id == self.id:
+                continue
+
+            self.send_message(
+                endpoint=endpoint,
+                node_addr=self.node_addrs[node_id],
+                value=value,
+            )
 
     def declare_self_as_master(self):
+        if self.master:
+            return
+
         self.master = True
         self.master_id = self.id
         print(f'This node {self.addr} is the master now')
-        for node_id in range(self.max_node_id):
-            if node_id != self.id:
-                self.send_message(
-                    endpoint='election',
-                    node_addr=self.node_addrs[node_id],
-                    value='victory'
-                )
+        self.broadcast('election', 'victory')
 
     def run(self):
         """
         Starts the node
         """
 
-        print(f'Starting node: {self.addr}')
         while True:
             if self.master_id is None:
                 self.establish_master_conn()
@@ -89,51 +107,51 @@ class Node:
             self.slave_loop()
 
     def establish_master_conn(self):
+        """
+        Begins to establish master in the network.
+        """
         print('Attempting to establish new master')
         # If we are the highest id in the cluster we must be the master
         # So just broadcast to all other nodes to surrender
         if self.id == self.max_node_id:
-            print('This node is the highest id, declaring self as master')
             self.declare_self_as_master()
-            return  # TODO cannot return instead must wait for election results
-        # Else send election message to all other nodes
-        for node_id in range(self.max_node_id):
-            if node_id == self.id:
-                continue
-
-            print('Sending election message to node: ', node_id)
-            node_addr = self.node_addrs[node_id]
-            self.send_message(
-                endpoint='election',
-                node_addr=node_addr,
-                value=self.id
-            )
+        else:
+            # Else send election message to all other nodes
+            for node_id in range(self.id + 1, self.max_node_id):
+                self.send_message(
+                    endpoint='election',
+                    node_addr=self.node_addrs[node_id],
+                    value=self.id,
+                )
 
         self.wait_for_election_results()
 
     def wait_for_election_results(self):
-        # Begin listening for responses
-        print('Waiting for election results')
+        """
+        Waits for election results, this must be called even in node that knows they are the master
+        """
+
         while True:
-            message = read_next_message_from_queue(timeout_secs=REQ_TIMEOUT)
+            message = read_next_message_from_queue(timeout_secs=ELECTION_TIMEOUT)
             if message is None:
-                print('No election results received, declaring self as master')
-                self.declare_self_as_master()
+                if not self.surrendered:
+                    self.declare_self_as_master()
                 break
 
             if message.key != 'election':
-                received_messages.put(message)  # Add message back to queue
+                # received_messages.put(message)  # Add message back to queue
                 continue
 
             if message.value == 'victory':
                 # We have received a victory message from another node
                 self.master_id = message.sender_id
-                print(f'Master (id={self.master_id}) has been established...')
+                print(f'Master (id={self.master_id}) has been established via victory message')
                 break
 
             if message.value == 'surrender':
                 # We have received surrender message from another node that has higher id
                 print('Found node with higher id, surrendering...')
+                self.surrendered = True
                 continue
 
             if int(message.value) < self.id:
@@ -141,48 +159,54 @@ class Node:
                 self.send_message(
                     node_addr=self.node_addrs[message.sender_id],
                     endpoint='election',
-                    value='surrender'
+                    value='surrender',
                 )
 
-    def master_loop(self):
-        print('Coordinating distributed operation (coloring the nodes) ...')
-        self.find_active_nodes()
-        self.assign_colors()
-        if self.colors_assigned():
-            print('All nodes have been assigned a color')
-
     def find_active_nodes(self):
+        print('Finding active nodes...')
         self.alive_nodes.clear()
         self.node_colors.clear()
         self.uncolored_nodes.clear()
 
+        for node_id in range(self.max_node_id):
+            if node_id == self.id:
+                continue
+
+        self.broadcast('heartbeat', 'request')
+
         while True:
+            if len(self.alive_nodes) == self.max_node_id + 1:
+                break
+
             message = read_next_message_from_queue(timeout_secs=HEARTBEAT_TIMEOUT_SECS)
             if message is None:
                 break
 
             if message.key == 'heartbeat':
                 if message.value == 'request':
-                    self.send_message(message.sender_id, 'heartbeat', 'response')
+                    self.send_message(self.node_addrs[message.sender_id], 'heartbeat', 'response')
                 elif message.value == 'response':
                     self.alive_nodes.add(message.sender_id)
 
     def assign_colors(self):
         n_green = len(self.alive_nodes) - 1
-        self.change_color(NodeColor.GREEN)
         n_green -= 1
+
+        # Change color for this node since its the master
+        self.change_color('green')
+        self.node_colors[self.id] = 'green'
 
         # Random permutation of nodes
         nodes = list(self.alive_nodes)
         random.shuffle(nodes)
 
-        for idx, node in enumerate(nodes):
-            if idx < n_green:
-                self.send_message(node, 'color', NodeColor.GREEN)
+        for idx, node_id in enumerate(nodes):
+            if idx < n_green:  # assign green color
+                self.send_message(self.node_addrs[node_id], 'color', 'green')
                 continue
 
             # The rest is colored red
-            self.send_message(node, 'color', NodeColor.RED)
+            self.send_message(self.node_addrs[node_id], 'color', 'red')
 
         # This set is used to keep track of nodes that have not yet responded
         self.uncolored_nodes = set(nodes)
@@ -193,6 +217,9 @@ class Node:
         """
 
         while True:
+            if len(self.uncolored_nodes) == 0:
+                return True
+
             message = read_next_message_from_queue(timeout_secs=HEARTBEAT_TIMEOUT_SECS)
             if message is None:
                 return False
@@ -201,22 +228,76 @@ class Node:
                 self.node_colors[message.sender_id] = message.value
                 self.uncolored_nodes.remove(message.sender_id)
 
-            if len(self.uncolored_nodes) == 0:
-                return True
+    def master_loop(self):
+        print('Coordinating distributed operation (coloring the nodes) ...')
+        self.find_active_nodes()
+        self.assign_colors()
+        if self.colors_assigned():
+            print('All nodes have been assigned a color')
+            print(self.node_colors)
+
+        def send_msg():
+            print('BEEP slaves')
+            self.broadcast('heartbeat', 'request')
+
+        self.heartbeat_loop(send_msg)
 
     def slave_loop(self):
-        print('Waiting for master to assign colors ...')
+        print('Entering slave mode ...')
 
         while True:
             message = read_next_message_from_queue(timeout_secs=COLOR_ASSIGNMENT_TIMEOUT_SECS)
             if message is None:
-                self.master_id = None
-                return
+                time.sleep(HEARTBEAT_TIMEOUT_SECS / 2)
+                continue
 
             if message.key == 'color':
                 self.change_color(message.value)
-                self.send_message(self.master_id, 'color', self.color)
+                self.send_message(
+                    node_addr=self.node_addrs[self.master_id],
+                    endpoint='color',
+                    value=self.color,
+                )
                 break
 
             if message.key == 'heartbeat' and message.value == 'request':
-                self.send_message(message.sender_id, 'heartbeat', 'response')
+                self.send_message(
+                    node_addr=self.node_addrs[message.sender_id],
+                    endpoint='heartbeat',
+                    value='response',
+                )
+
+        def send_msg():
+            print('BEEP master')
+            self.send_message(
+                node_addr=self.node_addrs[self.master_id],
+                endpoint='heartbeat',
+                value='request',
+            )
+
+        # I.e. something to keep the nodes running and talking to each other, ...
+        self.heartbeat_loop(send_msg)
+
+    def heartbeat_loop(self, send_message_fn):
+        send_message_fn()
+        last_message_at = time.time()
+        while True:
+            message = read_next_message_from_queue(timeout_secs=HEARTBEAT_TIMEOUT_SECS)
+
+            if time.time() - last_message_at > HEARTBEAT_TIMEOUT_SECS / 2:
+                send_message_fn()
+                last_message_at = time.time()
+
+            if message is None:
+                time.sleep(HEARTBEAT_TIMEOUT_SECS / 4)
+                continue
+
+            if message.key == 'heartbeat' and message.value == 'request':
+                print('BOOP')
+                self.send_message(
+                    node_addr=self.node_addrs[message.sender_id],
+                    endpoint='heartbeat',
+                    value='response',
+                )
+
+
