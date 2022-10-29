@@ -65,6 +65,13 @@ class Node:
         self.log_message(f'Changing color from "{self.color}" to "{to}"')
         self.color = to
 
+    def print_node_colors(self):
+        for node_id in range(self.max_node_id + 1):
+            if node_id in self.node_colors.keys():
+                self.log_message(f'NODE-{node_id + 1} color: {self.node_colors[node_id]}')
+            else:
+                self.log_message(f'NODE-{node_id + 1} color: N/A (disconnected)')
+
     def send_message(self, node_addr: str, endpoint: str, value):
         try:
             requests.post(f'{node_addr}/{endpoint}',
@@ -98,7 +105,7 @@ class Node:
 
         self.master = True
         self.master_id = self.id
-        self.log_message(f'selected as MASTER')
+        self.log_message(f'Selected as MASTER')
         self.broadcast('election', 'victory')
 
     def run(self):
@@ -174,7 +181,6 @@ class Node:
                 )
 
     def find_active_nodes(self):
-        self.log_message('Finding active nodes...')
         self.alive_nodes.clear()
         self.node_colors.clear()
         self.uncolored_nodes.clear()
@@ -200,10 +206,14 @@ class Node:
                     self.alive_nodes.add(message.sender_id)
 
     def assign_colors(self):
-        n_green = math.floor(len(self.alive_nodes) / 3)
-        n_green -= 1
+        """
+        Assigns colors to all nodes
+        """
 
-        # Change color for this node since its the master
+        n_green = math.floor(len(self.alive_nodes) / 3)
+        n_green -= 1  # -1 for master node
+
+        # Change color for this node since it is the master
         self.change_color('green')
         self.node_colors[self.id] = 'green'
 
@@ -240,6 +250,10 @@ class Node:
                 self.uncolored_nodes.remove(message.sender_id)
 
     def master_loop(self):
+        """
+        Master loop
+        """
+
         self.log_message('Running MASTER mode...')
         self.change_color('master')
         self.log_message('Finding active nodes...')
@@ -248,10 +262,10 @@ class Node:
         self.assign_colors()
         if self.colors_assigned():
             self.log_message('SUCCESS - All nodes have been colored')
-            self.node_colors[self.id] = self.color
-            self.log_message(self.node_colors)
         else:
             self.log_message('ERROR - Not all nodes have been colored, some have died during the process...')
+        self.node_colors[self.id] = self.color
+        self.print_node_colors()
 
         def send_msg():
             self.log_message('Sending heartbeat to slaves')
@@ -260,7 +274,12 @@ class Node:
         self.heartbeat_loop(send_msg)
 
     def slave_loop(self):
+        """
+        Slave loop
+        """
+
         self.log_message('Running SLAVE mode...')
+        self.change_color('slave')
 
         while True:
             message = read_next_message_from_queue(timeout_secs=COLOR_ASSIGNMENT_TIMEOUT_SECS)
@@ -296,6 +315,10 @@ class Node:
         self.heartbeat_loop(send_msg)
 
     def heartbeat_loop(self, send_message_fn):
+        """
+        Simple loop for sending and responding to heartbeats
+        """
+
         send_message_fn()
         last_message_at = time.time()
         while True:

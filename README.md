@@ -57,10 +57,44 @@ eventually read it and process it.
 ## Run and deployment
 
 To run the application you will need to have Vagrant and Docker installed. The application is deployed via Vagrant
-using following command:
+using following command in the `ex01` directory:
 
 ```
 vagrant up
 ```
 
 This command will create the infrastructure and start the application. 
+
+To stop the application, run:
+
+```
+vagrant halt
+```
+
+And to remove the infrastructure, run:
+
+```
+vagrant destroy
+```
+
+It is also possible to change the number of nodes in the system by changing the 
+`APP_NODES_COUNT` variable in the `Vagrantfile` (at line 25).
+
+### Output
+
+Each node has its own log file in the `ex01` directory that is created automatically when the node runs.
+This log file contains all the information logged by the node during its lifetime - alternatively, this
+is also logged in the standard output of the node, accessible e.g. via Docker Desktop application.
+
+Example output for a 6-node system looks like this:
+
+Master node (NODE-6):
+```log
+
+```
+
+Slave node (NODE-1):
+```
+
+```
+
