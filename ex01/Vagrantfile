@@ -22,7 +22,7 @@ APP_NODES  = {
   :port => 1337 
 }
 
-APP_NODES_COUNT = 3 # number of nodes to start
+APP_NODES_COUNT = 4 # number of nodes to start
 
 # Common configuration
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
