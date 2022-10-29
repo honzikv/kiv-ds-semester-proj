@@ -79,7 +79,7 @@ class Node:
                           timeout=HEARTBEAT_TIMEOUT_SECS)
         except Exception as ex:
             pass
-            self.log_message(ex)
+            # self.log_message(ex)
 
     def broadcast(self, endpoint, value):
         """
@@ -149,16 +149,16 @@ class Node:
         Waits for election results, this must be called even in node that knows they are the master
         """
 
+        last_election_message_time = time.time()
         while True:
             message = read_next_message_from_queue(timeout_secs=ELECTION_TIMEOUT)
-            if message is None or message.key != 'election':
+            if message is None or (
+                    message.key != 'election' and time.time() - last_election_message_time > ELECTION_TIMEOUT):
                 if not self.surrendered:
                     self.declare_self_as_master()
                 break
 
-            # if message.key != 'election' and :
-            #     # received_messages.put(message)  # Add message back to queue
-            #     continue
+            last_election_message_time = time.time()
 
             if message.value == 'victory':
                 # We have received a victory message from another node

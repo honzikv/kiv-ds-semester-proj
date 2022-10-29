@@ -12,7 +12,7 @@ from api_node import received_messages
 from message import Message
 from api_node import Node
 
-REQ_INTERVAL = 1  # s
+REQ_INTERVAL = 1
 
 app = fastapi.FastAPI()
 
@@ -97,18 +97,15 @@ def main():
         # Easiest way to synchronize the API and thread itself is to use a "health check endpoint" that we try
         # reaching until we get a 200 response
         # This would not be optimal for a real production system but will suffice for this
-        n_tries = 10
         while True:
-            if n_tries == 0:
-                print('Failed to start node, please restart the app')
-                exit(1)
-
-            time.sleep(REQ_INTERVAL)
-            api_logger.info('Trying to reach API...')
-            res = requests.get(f'{api_url}/healthcheck')  # this will block until conn is established
-            if res.status_code != 200:
-                n_tries -= 1
-                continue
+            try:
+                api_logger.info('Trying to reach API...')
+                res = requests.get(f'{api_url}/healthcheck')  # this will block until conn is established
+                if res.status_code != 200:
+                    time.sleep(REQ_INTERVAL)
+                    continue
+            except:
+                pass
 
             api_logger.info('Connection with API established ... starting node')
             break
