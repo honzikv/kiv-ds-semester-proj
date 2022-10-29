@@ -21,7 +21,7 @@ COLOR_ASSIGNMENT_TIMEOUT_SECS = 30
 received_messages = queue.Queue(maxsize=4096)
 
 
-def read_next_message_from_queue(timeout_secs=None) -> Message | None:
+def read_next_message_from_queue(timeout_secs=None):
     """
     Reads next message from queue, returning either the read message or none if the timeout is reached. If timeout is
     None this function is nonblocking, otherwise it blocks until a message is received or the timeout is reached.
@@ -37,7 +37,7 @@ def read_next_message_from_queue(timeout_secs=None) -> Message | None:
 
 class Node:
 
-    def __init__(self, node_addrs, node_addr) -> None:
+    def __init__(self, node_addrs, node_addr):
         self.node_addrs = node_addrs
         self.addr = node_addr
 

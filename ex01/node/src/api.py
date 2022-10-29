@@ -78,11 +78,12 @@ def main():
         port = local_addrs[args.node_addr][1]
         api_url = f'http://{hostname}:{port}'
     else:
-        node_addr_idx = int(get_env_var('node_addr'))
+        node_addr_idx = int(get_env_var('node_idx'))
         node_addrs = extract_node_addresses()
         node_urls = node_addrs[node_addr_idx]
         split = node_urls.split(':')[0]
         hostname, port = split[0], split[1]
+        print(f'App will run on hostname: {hostname}, port: {port}')
 
     def run_node():
         # Easiest way to synchronize the API and thread itself is to use a "health check endpoint" that we try
