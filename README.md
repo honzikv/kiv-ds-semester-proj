@@ -44,7 +44,9 @@ signals between them (i.e., master -> slave and slave -> master).
 
 ## Implementation
 
-Each node comprises two components:
+The application is written in Python (3.7+) and uses FastAPI, requests, and Uvicorn.
+
+Each node comprises two main components:
 - Node thread that contains the implementation of the aforementioned algorithm
 - FastAPI HTTP service for communication between nodes
 
