@@ -17,8 +17,6 @@ REQ_INTERVAL = 1  # s
 app = fastapi.FastAPI()
 
 
-# TODO docker + vagrant + fix stdout + readme
-
 def build_message(body: Dict, endpoint):
     return Message(
         key=endpoint,
@@ -92,7 +90,7 @@ def main():
         split = node_url.split(':')
         hostname, port = split[0], int(split[1])
         api_url = f'http://{hostname}:{port}'
-        log_file = f'/vagrant/node_{node_addr_idx + 1}.log'
+        log_file = f'/vagrant/NODE_{node_addr_idx + 1}.log'
         os.makedirs('/vagrant', exist_ok=True)
 
     def run_node():

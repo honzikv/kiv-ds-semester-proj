@@ -1,8 +1,3 @@
-#
-# *** Demo 3
-# Create N backend nodes and 1 frontend node working as a load-balancer.
-#
-
 VAGRANTFILE_API_VERSION = '2'
 # set docker as the default provider
 ENV['VAGRANT_DEFAULT_PROVIDER'] = 'docker'
@@ -26,7 +21,8 @@ APP_NODES  = {
   :image => NODE_IMAGE,
   :port => 1337 
 }
-APP_NODES_COUNT = 3 # number of nodes to start
+
+APP_NODES_COUNT = 6 # number of nodes to start
 
 # Common configuration
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|

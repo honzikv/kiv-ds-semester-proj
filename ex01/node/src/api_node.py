@@ -1,4 +1,5 @@
 import logging
+import math
 import queue
 import random
 import sys
@@ -88,6 +89,10 @@ class Node:
             )
 
     def declare_self_as_master(self):
+        """
+        Declares self as master and broadcasts the victory message
+        """
+
         if self.master:
             return
 
@@ -139,14 +144,14 @@ class Node:
 
         while True:
             message = read_next_message_from_queue(timeout_secs=ELECTION_TIMEOUT)
-            if message is None:
+            if message is None or message.key != 'election':
                 if not self.surrendered:
                     self.declare_self_as_master()
                 break
 
-            if message.key != 'election':
-                # received_messages.put(message)  # Add message back to queue
-                continue
+            # if message.key != 'election' and :
+            #     # received_messages.put(message)  # Add message back to queue
+            #     continue
 
             if message.value == 'victory':
                 # We have received a victory message from another node
@@ -195,7 +200,7 @@ class Node:
                     self.alive_nodes.add(message.sender_id)
 
     def assign_colors(self):
-        n_green = len(self.alive_nodes) - 1
+        n_green = math.floor(len(self.alive_nodes) / 3)
         n_green -= 1
 
         # Change color for this node since its the master
@@ -236,6 +241,7 @@ class Node:
 
     def master_loop(self):
         self.log_message('Running MASTER mode...')
+        self.change_color('master')
         self.log_message('Finding active nodes...')
         self.find_active_nodes()
         self.log_message(f'Found {len(self.alive_nodes)} active slave nodes. Assigning colors')
