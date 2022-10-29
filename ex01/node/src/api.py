@@ -83,6 +83,7 @@ def main():
         hostname = local_addrs[args.node_addr][0]
         port = local_addrs[args.node_addr][1]
         api_url = f'http://{hostname}:{port}'
+        log_file = f'../../NODE-dev_{node_addr_idx + 1}.log'
     else:
         print('Detected docker run...')
         node_addr_idx = int(get_env_var('node_idx'))
@@ -91,6 +92,8 @@ def main():
         split = node_url.split(':')
         hostname, port = split[0], int(split[1])
         api_url = f'http://{hostname}:{port}'
+        log_file = f'/vagrant/node_{node_addr_idx + 1}.log'
+        os.makedirs('/vagrant', exist_ok=True)
 
     def run_node():
         # Easiest way to synchronize the API and thread itself is to use a "health check endpoint" that we try
@@ -114,6 +117,7 @@ def main():
         Node(
             node_addr=api_url,
             node_addrs=['http://' + url for url in node_urls],
+            log_file=log_file
         ).run()
 
     # Start node thread

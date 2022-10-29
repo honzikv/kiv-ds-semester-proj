@@ -31,7 +31,7 @@ def read_next_message_from_queue(timeout_secs=None):
 
 class Node:
 
-    def __init__(self, node_addrs, node_addr):
+    def __init__(self, node_addrs, node_addr, log_file):
         self.node_addrs = node_addrs
         self.addr = node_addr
 
@@ -48,7 +48,7 @@ class Node:
         self.uncolored_nodes = set()
         self.surrendered = False  # whether the node surrendered claim to be master
         self.logger = logging.getLogger(f'NODE-{self.id + 1}')
-        self.log_file = f'node-{self.id + 1}.log'
+        self.log_file = log_file
         open(self.log_file, 'w').close()  # clear log file
 
     def log_message(self, message):
@@ -57,7 +57,7 @@ class Node:
         """
         print(f'NODE-{self.id + 1} {str(message)}',
               flush=True)  # flush is needed otherwise it does not show in the terminal
-        with open(f'/vagrant/NODE_{self.id + 1}.log', 'a') as file:
+        with open(self.log_file, 'a') as file:
             file.write(f'NODE-{self.id + 1} {str(message)}\n')
 
     def change_color(self, to):
@@ -93,7 +93,7 @@ class Node:
 
         self.master = True
         self.master_id = self.id
-        self.log_message(f'This node is the master now')
+        self.log_message(f'selected as MASTER')
         self.broadcast('election', 'victory')
 
     def run(self):
