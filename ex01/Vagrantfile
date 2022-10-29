@@ -6,8 +6,6 @@
 VAGRANTFILE_API_VERSION = '2'
 # set docker as the default provider
 ENV['VAGRANT_DEFAULT_PROVIDER'] = 'docker'
-# disable parallellism so that the containers come up in order
-ENV['VAGRANT_NO_PARALLEL'] = '1'
 ENV['FORWARD_DOCKER_PORTS'] = '1'
 # minor hack enabling to run the image and configuration trigger just once
 ENV['VAGRANT_EXPERIMENTAL']= 'typed_triggers'
@@ -40,7 +38,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
   end
 
-  config.vm.synced_folder '.', '/vagrant', type: 'rsync', rsync__exclude: '.*/'
+#   config.vm.synced_folder '.', '/vagrant', type: 'rsync', rsync__exclude: '.*/'
   config.ssh.insert_key = false
 
   # Create node addresses
@@ -59,7 +57,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   (1..APP_NODES_COUNT).each do |i|
     # Configure ip address and name
     node_ip_address = "#{APP_NODES[:subnet]}#{APP_NODES[:ip_offset] + i}"
-    node_name = "#{NODE_NAME_PREFIX}-#{i}"
+    node_name = "#{NODE_NAME_PREFIX}#{i}"
     # Configure the node
     config.vm.define node_name do |s|
       s.vm.network 'private_network', ip: node_ip_address
@@ -71,7 +69,9 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         d.env = {
           'node_idx' => i - 1, # node index - we start from 0
           'node_addrs': node_addrs,
-          'docker' => true
+          'docker' => true,
+          'port' => APP_NODES[:port],
+          'STARTUP_DELAY': "15"
         }
       end
       s.vm.post_up_message = "Node #{node_name} up and running. You can access the node with 'vagrant ssh #{node_name}'}"

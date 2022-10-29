@@ -9,12 +9,6 @@ import requests
 from message import Message
 import logging
 
-# Disable uvicorn logging for readability
-uvicorn_error = logging.getLogger("uvicorn.error")
-uvicorn_error.disabled = True
-uvicorn_access = logging.getLogger("uvicorn.access")
-uvicorn_access.disabled = True
-
 ELECTION_TIMEOUT = 10
 HEARTBEAT_TIMEOUT_SECS = 4
 COLOR_ASSIGNMENT_TIMEOUT_SECS = 30
@@ -53,9 +47,21 @@ class Node:
         self.node_colors = {}
         self.uncolored_nodes = set()
         self.surrendered = False  # whether the node surrendered claim to be master
+        self.logger = logging.getLogger(f'NODE-{self.id + 1}')
+        self.log_file = f'node-{self.id + 1}.log'
+        open(self.log_file, 'w').close()  # clear log file
+
+    def log_message(self, message):
+        """
+        Logs message to stdout and to vagrant file
+        """
+        print(f'NODE-{self.id + 1} {str(message)}',
+              flush=True)  # flush is needed otherwise it does not show in the terminal
+        with open(f'/vagrant/NODE_{self.id + 1}.log', 'a') as file:
+            file.write(f'NODE-{self.id + 1} {str(message)}\n')
 
     def change_color(self, to):
-        print(f'NODE {self.addr} Changing color from {self.color} to {to}')
+        self.log_message(f'Changing color from "{self.color}" to "{to}"')
         self.color = to
 
     def send_message(self, node_addr: str, endpoint: str, value):
@@ -65,7 +71,7 @@ class Node:
                           timeout=HEARTBEAT_TIMEOUT_SECS)
         except Exception as ex:
             pass
-            # print(ex)
+            self.log_message(ex)
 
     def broadcast(self, endpoint, value):
         """
@@ -87,7 +93,7 @@ class Node:
 
         self.master = True
         self.master_id = self.id
-        print(f'This node {self.addr} is the master now')
+        self.log_message(f'This node is the master now')
         self.broadcast('election', 'victory')
 
     def run(self):
@@ -110,7 +116,7 @@ class Node:
         """
         Begins to establish master in the network.
         """
-        print('Attempting to establish new master')
+        self.log_message('Attempting to establish new master')
         # If we are the highest id in the cluster we must be the master
         # So just broadcast to all other nodes to surrender
         if self.id == self.max_node_id:
@@ -145,17 +151,17 @@ class Node:
             if message.value == 'victory':
                 # We have received a victory message from another node
                 self.master_id = message.sender_id
-                print(f'Master (id={self.master_id}) has been established via victory message')
+                self.log_message(f'Master (NODE-{self.master_id + 1}) has been established via victory message')
                 break
 
             if message.value == 'surrender':
                 # We have received surrender message from another node that has higher id
-                print('Found node with higher id, surrendering...')
+                self.log_message('Found node with higher id, surrendering...')
                 self.surrendered = True
                 continue
 
             if int(message.value) < self.id:
-                print('Found node with lower id, sending surrender order.')
+                self.log_message('Found node with lower id, sending surrender order.')
                 self.send_message(
                     node_addr=self.node_addrs[message.sender_id],
                     endpoint='election',
@@ -163,7 +169,7 @@ class Node:
                 )
 
     def find_active_nodes(self):
-        print('Finding active nodes...')
+        self.log_message('Finding active nodes...')
         self.alive_nodes.clear()
         self.node_colors.clear()
         self.uncolored_nodes.clear()
@@ -229,21 +235,26 @@ class Node:
                 self.uncolored_nodes.remove(message.sender_id)
 
     def master_loop(self):
-        print('Coordinating distributed operation (coloring the nodes) ...')
+        self.log_message('Running MASTER mode...')
+        self.log_message('Finding active nodes...')
         self.find_active_nodes()
+        self.log_message(f'Found {len(self.alive_nodes)} active slave nodes. Assigning colors')
         self.assign_colors()
         if self.colors_assigned():
-            print('All nodes have been assigned a color')
-            print(self.node_colors)
+            self.log_message('SUCCESS - All nodes have been colored')
+            self.node_colors[self.id] = self.color
+            self.log_message(self.node_colors)
+        else:
+            self.log_message('ERROR - Not all nodes have been colored, some have died during the process...')
 
         def send_msg():
-            print('BEEP slaves')
+            self.log_message('Sending heartbeat to slaves')
             self.broadcast('heartbeat', 'request')
 
         self.heartbeat_loop(send_msg)
 
     def slave_loop(self):
-        print('Entering slave mode ...')
+        self.log_message('Running SLAVE mode...')
 
         while True:
             message = read_next_message_from_queue(timeout_secs=COLOR_ASSIGNMENT_TIMEOUT_SECS)
@@ -268,7 +279,7 @@ class Node:
                 )
 
         def send_msg():
-            print('BEEP master')
+            self.log_message('Sending heartbeat to master')
             self.send_message(
                 node_addr=self.node_addrs[self.master_id],
                 endpoint='heartbeat',
@@ -293,11 +304,9 @@ class Node:
                 continue
 
             if message.key == 'heartbeat' and message.value == 'request':
-                print('BOOP')
+                self.log_message('Responding to heartbeat request')
                 self.send_message(
                     node_addr=self.node_addrs[message.sender_id],
                     endpoint='heartbeat',
                     value='response',
                 )
-
-

@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 from typing import Dict
@@ -49,6 +50,10 @@ def health():
     return {'hello': 'world'}  # 200 is sufficient
 
 
+api_logger = logging.getLogger('Node-Start')
+api_logger.setLevel(logging.INFO)
+
+
 def main():
     def get_env_var(key):
         value = os.getenv(key)
@@ -73,22 +78,24 @@ def main():
         argparser.add_argument('--node_addr', type=int, required=True, help='Address of this node')
         args = argparser.parse_args()
 
-        node_urls = [f'http://{addr[0]}:{addr[1]}' for addr in local_addrs]
+        node_addr_idx = args.node_addr
+        node_urls = [f'{addr[0]}:{addr[1]}' for addr in local_addrs]
         hostname = local_addrs[args.node_addr][0]
         port = local_addrs[args.node_addr][1]
         api_url = f'http://{hostname}:{port}'
     else:
+        print('Detected docker run...')
         node_addr_idx = int(get_env_var('node_idx'))
-        node_addrs = extract_node_addresses()
-        node_urls = node_addrs[node_addr_idx]
-        split = node_urls.split(':')[0]
-        hostname, port = split[0], split[1]
-        print(f'App will run on hostname: {hostname}, port: {port}')
+        node_urls = extract_node_addresses()
+        node_url = node_urls[node_addr_idx]
+        split = node_url.split(':')
+        hostname, port = split[0], int(split[1])
+        api_url = f'http://{hostname}:{port}'
 
     def run_node():
         # Easiest way to synchronize the API and thread itself is to use a "health check endpoint" that we try
         # reaching until we get a 200 response
-        # This would most probably not be optimal for a real production system but will suffice for this
+        # This would not be optimal for a real production system but will suffice for this
         n_tries = 10
         while True:
             if n_tries == 0:
@@ -96,18 +103,17 @@ def main():
                 exit(1)
 
             time.sleep(REQ_INTERVAL)
+            api_logger.info('Trying to reach API...')
             res = requests.get(f'{api_url}/healthcheck')  # this will block until conn is established
-
             if res.status_code != 200:
-                print('Waiting for api to start')
                 n_tries -= 1
                 continue
 
+            api_logger.info('Connection with API established ... starting node')
             break
-        print(f'Starting node {args.node_addr}')
         Node(
-            node_addr=node_urls[args.node_addr],
-            node_addrs=node_urls
+            node_addr=api_url,
+            node_addrs=['http://' + url for url in node_urls],
         ).run()
 
     # Start node thread
@@ -115,8 +121,12 @@ def main():
     thread.daemon = True
     thread.start()
 
-    # Run the API
-    uvicorn.run(app, host=hostname, port=port)
+    # Disable uvicorn logging for readability
+    uvicorn_error = logging.getLogger("uvicorn.error")
+    uvicorn_error.disabled = True
+    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access.disabled = True
+    uvicorn.run(app, host=hostname, port=port, log_level='critical')
 
 
 if __name__ == '__main__':
