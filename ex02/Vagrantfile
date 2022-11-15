@@ -1,0 +1,76 @@
+VAGRANTFILE_API_VERSION = '2'
+# set docker as the default provider
+ENV['VAGRANT_DEFAULT_PROVIDER'] = 'docker'
+ENV['FORWARD_DOCKER_PORTS'] = '1'
+# minor hack enabling to run the image and configuration trigger just once
+ENV['VAGRANT_EXPERIMENTAL']= 'typed_triggers'
+
+unless Vagrant.has_plugin?('vagrant-docker-compose')
+  system('vagrant plugin install vagrant-docker-compose')
+  puts 'Dependencies installed, please try the command again.'
+  exit
+end
+
+# Names of Docker images built:
+NODE_IMAGE = 'ds/ex01/node:0.1'
+NODE_NAME_PREFIX = 'node-'
+APP_NODES  = { 
+  :prefix => "node-",  # backend nodes get names: backend-1, backend-2, etc.
+  :subnet => "10.0.1.",
+  :ip_offset => 111,  # backend nodes get IP addresses: 10.0.1.111, .112, .113, etc
+  :image => NODE_IMAGE,
+  :port => 1337 
+}
+
+APP_NODES_COUNT = 4 # number of nodes to start
+
+# Common configuration
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  config.trigger.before :up, type: :command do |trigger|
+    trigger.name = 'Dockerize and configurize'
+    trigger.ruby do |env, machine|
+      puts "Building node docker image"
+      `docker build node -t "#{NODE_IMAGE}"`
+    end
+  end
+
+#   config.vm.synced_folder '.', '/vagrant', type: 'rsync', rsync__exclude: '.*/'
+  config.ssh.insert_key = false
+
+  # Create node addresses
+  node_addrs = []
+  (1..APP_NODES_COUNT).each do |i|
+    # Add node address to the array
+    node_addrs << "#{NODE_NAME_PREFIX}#{i}:#{APP_NODES[:port]}"
+  end
+
+
+  # And join them with comma
+  node_addrs = node_addrs.join(',')
+  puts "Node addresses set to: #{node_addrs}"
+
+  # Start each node
+  (1..APP_NODES_COUNT).each do |i|
+    # Configure ip address and name
+    node_ip_address = "#{APP_NODES[:subnet]}#{APP_NODES[:ip_offset] + i}"
+    node_name = "#{NODE_NAME_PREFIX}#{i}"
+    # Configure the node
+    config.vm.define node_name do |s|
+      s.vm.network 'private_network', ip: node_ip_address
+      s.vm.hostname = node_name
+      s.vm.provider 'docker' do |d|
+        d.image = APP_NODES[:image]
+        d.name = node_name
+        d.has_ssh = true
+        d.env = {
+          'node_idx' => i - 1, # node index - we start from 0
+          'node_addrs': node_addrs,
+          'docker' => true,
+          'port' => APP_NODES[:port],
+          'STARTUP_DELAY': "3"
+        }
+      end
+      s.vm.post_up_message = "Node #{node_name} up and running. You can access the node with 'vagrant ssh #{node_name}'}"
+    end
+  end
+end
