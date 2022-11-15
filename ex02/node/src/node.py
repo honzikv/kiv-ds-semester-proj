@@ -1,3 +1,4 @@
+from enum import Enum
 import os
 import queue
 import time
@@ -45,6 +46,7 @@ class Node:
         self.color = 'init'  # init, red, green
         self.is_master = False  # Is this node the master?
         self.master_id = None  # id of the master
+        self.surrendered = False
 
         # Structures to keep track of alive / colored nodes (used in master mode)
         self.alive_nodes = set()
@@ -57,6 +59,9 @@ class Node:
             id=self.id,
             node_addrs=self.node_addrs,
         )
+
+        # Structures to keep track of health of nodes
+        self.last_master_response = None
 
     def change_color(self, to):
         """
@@ -123,9 +128,14 @@ class Node:
                 self.master_loop()
             else:
                 self.slave_setup()
+                if self.color == 'init':
+                    self.logger.log('Slave setup failed')
+                    self.master_id = None
+                    time.sleep(ELECTION_UNSUCESSFUL_SLEEP_SECS)
+                    continue
+
                 self.logger.log('Slave setup complete')
                 self.slave_loop()
-                
 
     def election_mode(self):
         """
@@ -145,47 +155,63 @@ class Node:
 
         self.handle_election_messages()
 
+    def handle_election_message(self, message: Message):
+        """
+        Handles single election message.
+
+        Args:
+            message (Message): election message
+
+        Returns:
+            str: to signal whether to exit the loop
+        """
+
+        if message.value == 'victory':
+            # We have received a victory message from another node
+            self.master_id = message.node_id
+            self.is_master = False
+            self.logger.log(
+                f'Master (NODE-{self.master_id + 1}) has been established via victory message')
+            return True
+
+        if message.value == 'surrender':
+            # We have received a surrender message from another node
+            # This means that we won't be the master
+            self.logger.log('Found node with higher id, surrendering...')
+            self.surrendered = True
+
+        if int(message.value) < self.id:
+            self.log_message(
+                'Found node with lower id, sending surrender message')
+            self.messenger.send_message(
+                node_id=message.node_id,
+                endpoint='election',
+                value='surrender',
+            )
+
+        return False
+
     def handle_election_messages(self):
         """
         Handles election messages from other nodes
         """
 
-        surrendered = False  # flag to keep if we received a surrender message
+        self.surrendered = False  # flag to keep if we received a surrender message
         while True:
             message = self.read_next_message(
                 timeout_secs=ELECTION_MSG_TIMEOUT_SECS)
 
             if message is None:
-                if not surrendered:
+                if not self.surrendered:
                     self.declare_self_as_master()
                 break
 
             if message.key != 'election':
                 continue  # Ignore non-election messages
 
-            if message.value == 'victory':
-                # We have received a victory message from another node
-                self.master_id = message.node_id
-                self.is_master = False
-                self.logger.log(
-                    f'Master (NODE-{self.master_id + 1}) has been established via victory message')
+            election_finished = self.handle_election_message(message)
+            if election_finished:
                 break
-
-            if message.value == 'surrender':
-                # We have received a surrender message from another node
-                # This means that we won't be the master
-                self.logger.log('Found node with higher id, surrendering...')
-                surrendered = True
-                continue
-
-            if int(message.value) < self.id:
-                self.log_message(
-                    'Found node with lower id, sending surrender message')
-                self.messenger.send_message(
-                    node_id=message.node_id,
-                    endpoint='election',
-                    value='surrender',
-                )
 
     def declare_self_as_master(self):
         """
@@ -275,7 +301,7 @@ class Node:
             if message.key == 'color':
                 self.uncolored_nodes.remove(message.sender_id)
                 self.assign_color(message.sender_id, message.value)
-            
+
             if message.key == 'heartbeat' and message.value == 'request':
                 self.messenger.send_message(
                     node_id=message.sender_id,
@@ -298,27 +324,28 @@ class Node:
 
         # Color the nodes
         self.assign_colors()
-        
+
         if (self.all_colors_assigned()):
             self.logger.log('All nodes have been colored')
         else:
             self.logger.log('Error, not all nodes have been colored')
-        
+
         self.print_node_colors()
         
+
     def slave_setup(self):
         """
         Runs cluster setup for slave node
         """
-        
+
         self.logger.log('Running setup for slave mode')
         self.change_color('slave')
-        
+
         while True:
             message = self.read_next_message(COLOR_ASSIGNMENT_SECS)
             if message is None:
                 break
-            
+
             if message.key == 'color':
                 self.change_color(message.value)
                 self.messenger.send_message(
@@ -327,28 +354,77 @@ class Node:
                     value=self.color
                 )
                 break
-            
+
             if message.key == 'heartbeat' and message.value == 'request':
                 self.messenger.send_message(
                     node_id=self.master_id,
                     endpoint='heartbeat',
                     value='response',
                 )
-    
+
     def slave_loop(self):
         """
         Loop for slave mode.
         Here we react to incoming messages and send heartbeats to the master.
         If the master does not respond we initialize election
         """
-        
+
         self.messenger.send_message(
             node_id=self.master_id,
             endpoint='heartbeat',
             value='request',
         )
+        # We assume
         last_heartbeat_request = time.time()
-        
+        self.last_master_response = last_heartbeat_request
+
         while True:
+            # If master did not respond until timeout start election
+            # i.e. break out of the loop and set flags that will trigger it
+            if time.time() - self.last_master_response > HEARTBEAT_INTERVAL_SECS:
+                self.logger.log('Master did not respond, starting election')
+                self.is_master = False
+                self.master_id = None
+                break
+
+            # Send heartbeat request to master if timeout reached
+            if time.time() - last_heartbeat_request > HEARTBEAT_INTERVAL_SECS:
+                self.messenger.send_message(
+                    node_id=self.master_id,
+                    endpoint='heartbeat',
+                    value='request',
+                )
+
             message = self.read_next_message(HEARTBEAT_INTERVAL_SECS)
+            if message is None:
+                continue
+
+            # If we get a heartbeat message we simply respond back
+            if message.key == 'heartbeat':
+                self.last_master_response = time.time()
+                if message.value == 'request':
+                    self.messenger.send_message(
+                        node_id=message.sender_id,
+                        endpoint='heartbeat',
+                        value='response',
+                    )
             
+            # If we get an election message we handle it in a handle_election_message
+            # This can be e.g. new node joining the cluster or new master having been
+            # elected
+            if message.key == 'election':
+                # For slave we obviously only care for the master
+                new_master = self.handle_election_message(message)
+                if new_master:
+                    return  # From here we will enter "slave_setup" again
+            
+            # Lastly we handle the color message
+            if message.key == 'color':
+                self.change_color(message.value)
+                self.messenger.send_message(
+                    node_id=self.master_id,
+                    endpoint='color',
+                    value=self.color
+                )
+         
+        
