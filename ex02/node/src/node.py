@@ -11,9 +11,10 @@ from messenger import Messenger
 
 
 ELECTION_MSG_TIMEOUT_SECS = 10
-ELECTION_UNSUCESSFUL_SLEEP_SECS = 10
+ELECTION_UNSUCESSFUL_SLEEP_SECS = 7
 HEARTBEAT_INTERVAL_SECS = 5
-COLOR_ASSIGNMENT_SECS = 10
+COLOR_ASSIGNMENT_SECS = 7
+NODE_ALIVE_TIMEOUT_SECS = 15
 
 
 class Node:
@@ -123,7 +124,7 @@ class Node:
                     continue
 
             if self.is_master:
-                self.master_setup()
+                self.setup_colors()
                 self.logger.log('Master setup complete')
                 self.master_loop()
             else:
@@ -311,12 +312,11 @@ class Node:
 
         return len(self.uncolored_nodes) == 0
 
-    def master_setup(self):
+    def setup_colors(self):
         """
-        Runs cluster setup for master node
+        Runs master setup - setups color for every alive node in the cluster
         """
 
-        self.logger.log('Running setup for master mode')
         self.logger.log('Attempting to color the nodes')
 
         # Find active nodes
@@ -331,7 +331,6 @@ class Node:
             self.logger.log('Error, not all nodes have been colored')
 
         self.print_node_colors()
-        
 
     def slave_setup(self):
         """
@@ -381,7 +380,7 @@ class Node:
         while True:
             # If master did not respond until timeout start election
             # i.e. break out of the loop and set flags that will trigger it
-            if time.time() - self.last_master_response > HEARTBEAT_INTERVAL_SECS:
+            if time.time() - self.last_master_response > NODE_ALIVE_TIMEOUT_SECS:
                 self.logger.log('Master did not respond, starting election')
                 self.is_master = False
                 self.master_id = None
@@ -408,7 +407,7 @@ class Node:
                         endpoint='heartbeat',
                         value='response',
                     )
-            
+
             # If we get an election message we handle it in a handle_election_message
             # This can be e.g. new node joining the cluster or new master having been
             # elected
@@ -417,7 +416,7 @@ class Node:
                 new_master = self.handle_election_message(message)
                 if new_master:
                     return  # From here we will enter "slave_setup" again
-            
+
             # Lastly we handle the color message
             if message.key == 'color':
                 self.change_color(message.value)
@@ -426,5 +425,77 @@ class Node:
                     endpoint='color',
                     value=self.color
                 )
-         
-        
+
+    def handle_cluster_status(self, last_slave_responses):
+        """
+        Handles status of the cluster, returns True if cluster needs to be
+        recolored - i.e. some node has died in the process
+
+        Args:
+            last_slave_responses (dict): dict
+
+        Returns:
+            bool: True if cluster needs to be recolored
+        """
+
+        # Begin checking if all slaves responded to the heartbeat
+        now = time.time()
+        for node_id, last_response in last_slave_responses.items():
+            if now - last_response > NODE_ALIVE_TIMEOUT_SECS:
+                self.logger.log(
+                    f'Node {node_id} did not respond, recoloring...')
+                return True
+
+            if now - last_response > HEARTBEAT_INTERVAL_SECS:
+                # Send heartbeat request to the slave if timeout reached
+                self.messenger.send_message(
+                    node_id=node_id,
+                    endpoint='heartbeat',
+                    value='request',
+                )
+
+        return False
+
+    def master_loop(self):
+        """
+        Loop for master mode.
+        """
+
+        # Keep a dictioanary of responses from all slaves
+        # At the start we assume that all slaves are alive
+        last_slave_responses = {}
+
+        for node_id in self.alive_nodes:
+            self.messenger.send_message(
+                node_id=node_id,
+                endpoint='heartbeat',
+                value='request',
+            )
+            last_slave_responses[node_id] = time.time()
+
+        while True:
+            message = self.read_next_message(HEARTBEAT_INTERVAL_SECS)
+            if message is None:
+                continue
+
+            requires_recoloring = self.handle_cluster_status(
+                last_slave_responses)
+            if requires_recoloring:
+                # Some node is unavailable - begin recoloring the nodes
+                # I.e. exit this loop which will result in setup_colors being
+                # run again
+                return
+
+            if message.key == 'heartbeat':
+                last_slave_responses[message.sender_id] = time.time()
+                if message.value == 'request':
+                    self.messenger.send_message(
+                        node_id=message.sender_id,
+                        endpoint='heartbeat',
+                        value='response',
+                    )
+
+            if message.key == 'election':
+                new_master = self.handle_election_message(message)
+                if new_master:
+                    return  # return and we will start in the slave loop
