@@ -9,8 +9,7 @@ from message import Message
 from node_logger import NodeLogger
 from messenger import Messenger
 
-
-ELECTION_MSG_TIMEOUT_SECS = 10
+ELECTION_MSG_TIMEOUT_SECS = 15
 ELECTION_UNSUCESSFUL_SLEEP_SECS = 7
 HEARTBEAT_INTERVAL_SECS = 5
 COLOR_ASSIGNMENT_SECS = 7
@@ -88,6 +87,13 @@ class Node:
             self.change_color(color)
         else:
             self.logger.log(f'Node {id} was assigned color: "{color}"')
+    
+    def print_node_colors(self):
+        for node_id in range(self.max_node_id + 1):
+            if node_id in self.node_colors.keys():
+                self.logger.log(f'NODE-{node_id + 1} color: {self.node_colors[node_id]}')
+            else:
+                self.logger.log(f'NODE-{node_id + 1} color: N/A (disconnected)')
 
     def read_next_message(self, timeout_secs=None) -> Union[Message, None]:
         """
@@ -169,7 +175,7 @@ class Node:
 
         if message.value == 'victory':
             # We have received a victory message from another node
-            self.master_id = message.node_id
+            self.master_id = message.sender_id
             self.is_master = False
             self.logger.log(
                 f'Master (NODE-{self.master_id + 1}) has been established via victory message')
@@ -180,12 +186,13 @@ class Node:
             # This means that we won't be the master
             self.logger.log('Found node with higher id, surrendering...')
             self.surrendered = True
+            return False
 
         if int(message.value) < self.id:
-            self.log_message(
+            self.logger.log(
                 'Found node with lower id, sending surrender message')
             self.messenger.send_message(
-                node_id=message.node_id,
+                node_id=message.sender_id,
                 endpoint='election',
                 value='surrender',
             )
@@ -269,7 +276,7 @@ class Node:
         """
 
         # 1/3 of the nodes are green, the rest is red
-        n_green = math.floor(len(self.alive_nodes) / 3)
+        n_green = math.ceil(len(self.alive_nodes) / 3)
         n_green -= 1  # - 1 for the master node
         self.assign_color(self.id, 'green')
 
@@ -294,7 +301,11 @@ class Node:
         Ensures that all nodes have assigned colors
         """
 
+        # TODO better timeout - or just remove the color response
         while True:
+            if len(self.uncolored_nodes) == 0:
+                break
+            
             message = self.read_next_message(HEARTBEAT_INTERVAL_SECS)
             if message is None:
                 break
@@ -325,7 +336,7 @@ class Node:
         # Color the nodes
         self.assign_colors()
 
-        if (self.all_colors_assigned()):
+        if self.all_colors_assigned():
             self.logger.log('All nodes have been colored')
         else:
             self.logger.log('Error, not all nodes have been colored')
@@ -442,8 +453,7 @@ class Node:
         now = time.time()
         for node_id, last_response in last_slave_responses.items():
             if now - last_response > NODE_ALIVE_TIMEOUT_SECS:
-                self.logger.log(
-                    f'Node {node_id} did not respond, recoloring...')
+                self.logger.log(f'Node {node_id} did not respond, recoloring...')
                 return True
 
             if now - last_response > HEARTBEAT_INTERVAL_SECS:
