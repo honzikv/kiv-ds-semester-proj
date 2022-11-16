@@ -1,6 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor
 import requests
 
-DEFAULT_TIMEOUT_SECS = 5
+DEFAULT_TIMEOUT_SECS = 1
 
 
 class Messenger:
@@ -19,33 +20,44 @@ class Messenger:
             node_addrs (list): list of all node addresses
             timeout (_type_, optional): Request timeout. Defaults to DEFAULT_TIMEOUT_SECS.
         """
-        
+
         self.id = id
         self.node_addrs = node_addrs
         self.timeout = timeout
+        
+        # To send requests async we create a thread pool executor which performs requests.post
+        # for every message sent
+        self.thread_pool_executor = ThreadPoolExecutor(max_workers=3)
+    
+    def __del__(self):
+        self.thread_pool_executor.shutdown()
 
-    def send_message(self, node_id, endpoint: str, value):
-        """
-        Sends message to given node address
-
-        Returns:
-            bool: True if message was sent successfully, False otherwise
-        """
-
-        node_addr = self.node_addrs[node_id]
+    def send_message_sync(self, node_id, endpoint: str, value):
         try:
-            requests.post(
-                url=f'{node_addr}/{endpoint}',
+            return requests.post(
+                url=f'{self.node_addrs[node_id]}/{endpoint}',
                 json={
                     'value': value,
                     'sender_id': self.id
                 },
                 timeout=self.timeout
             )
-            return True
-        except Exception as ex:
-            # print(f'Error sending message to {node_addr}: {ex}')
-            return False
+        except Exception as e:
+            # print(e, flush=True)
+            pass
+
+    def send_message(self, node_id: int, endpoint: str, value):
+        """
+        Sends message to given node address
+
+        Returns:
+            bool: True if message was sent successfully, False otherwise
+        """
+        
+        # Result is actually not relevant for us, we just don't want to block the caller thread
+        self.thread_pool_executor.submit(self.send_message_sync, node_id, endpoint, value)
+        # self.send_message_sync(node_id, endpoint, value)
+        
 
     def broadcast(self, endpoint, value):
         """

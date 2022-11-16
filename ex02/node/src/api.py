@@ -18,7 +18,7 @@ app = fastapi.FastAPI()
 message_queue = queue.Queue()  # message queue for the node
 
 
-def build_message(body: Dict, endpoint):
+def build_message(body: Dict, endpoint: str):
     return Message(
         key=endpoint,
         value=body['value'],
@@ -54,7 +54,7 @@ api_logger.setLevel(logging.INFO)
 
 
 def main():
-    def get_env_var(key):
+    def get_env_var(key: str):
         value = os.getenv(key)
         if value is None:
             raise ValueError(f'Environment variable {key} not set')
@@ -81,7 +81,6 @@ def main():
         node_urls = [f'{addr[0]}:{addr[1]}' for addr in local_addrs]
         hostname = local_addrs[args.node_addr][0]
         port = local_addrs[args.node_addr][1]
-        api_url = f'http://{hostname}:{port}'
         log_file = f'../../NODE-dev_{node_addr_idx + 1}.log'
     else:
         print('Detected docker run...')
@@ -90,26 +89,12 @@ def main():
         node_url = node_urls[node_addr_idx]
         split = node_url.split(':')
         hostname, port = split[0], int(split[1])
-        api_url = f'http://{hostname}:{port}'
         log_file = f'/vagrant/NODE_{node_addr_idx + 1}.log'
         os.makedirs('/vagrant', exist_ok=True)
 
     def run_node():
-        # Easiest way to synchronize the API and thread itself is to use a "health check endpoint" that we try
-        # reaching until we get a 200 response
-        # This would not be optimal for a real production system but will suffice for this
-        while True:
-            try:
-                api_logger.info('Trying to reach API...')
-                res = requests.get(f'{api_url}/healthcheck')  # this will block until conn is established
-                if res.status_code != 200:
-                    time.sleep(REQ_INTERVAL)
-                    continue
-            except:
-                pass
-
-            api_logger.info('Connection with API established ... starting node')
-            break
+        # Sleep for some time to give the API time to start
+        time.sleep(5)
         Node(
             id=node_addr_idx,
             message_queue=message_queue,

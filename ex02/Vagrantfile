@@ -22,7 +22,7 @@ APP_NODES  = {
   :port => 1337 
 }
 
-APP_NODES_COUNT = 4 # number of nodes to start
+APP_NODES_COUNT = 6 # number of nodes to start
 
 # Common configuration
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
@@ -67,7 +67,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
           'node_addrs': node_addrs,
           'docker' => true,
           'port' => APP_NODES[:port],
-          'STARTUP_DELAY': "3"
+          'STARTUP_DELAY': '5' # seconds
         }
       end
       s.vm.post_up_message = "Node #{node_name} up and running. You can access the node with 'vagrant ssh #{node_name}'}"

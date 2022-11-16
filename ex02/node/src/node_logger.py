@@ -1,4 +1,5 @@
-from datetime import datetime
+import os
+import time
 
 
 class NodeLogger:
@@ -6,7 +7,7 @@ class NodeLogger:
     Class used to log into node's console and log file
     """
 
-    def __init__(self, id, log_file):
+    def __init__(self, id: int, log_file: os.path):
         self.id = id
         self.log_file = log_file
         open(self.log_file, 'w').close()
@@ -18,7 +19,9 @@ class NodeLogger:
         Args:
             message (str): message to log
         """
-        current_time = datetime.now().strftime('%H:%M:%S')
+        
+        localtime = time.localtime()
+        current_time = time.strftime('%H:%M:%S', localtime)
         msg = f'[{current_time}] NODE-{self.id + 1} {message}'
         print(msg, flush=True)  # flush is needed otherwise
         # it does not show in the terminal right away
