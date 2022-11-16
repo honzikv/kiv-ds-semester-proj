@@ -9,11 +9,11 @@ from message import Message
 from node_logger import NodeLogger
 from messenger import Messenger
 
-ELECTION_MSG_TIMEOUT_SECS = 15
+ELECTION_MSG_TIMEOUT_SECS = 14
 ELECTION_UNSUCESSFUL_SLEEP_SECS = 7
 HEARTBEAT_INTERVAL_SECS = 5
 COLOR_ASSIGNMENT_SECS = 7
-NODE_ALIVE_TIMEOUT_SECS = 15
+NODE_ALIVE_TIMEOUT_SECS = 14
 
 
 class Node:
@@ -60,8 +60,7 @@ class Node:
             node_addrs=self.node_addrs,
         )
 
-        # Structures to keep track of health of nodes
-        self.last_master_response = None
+        self.last_master_response = None  # last response from the master
 
     def change_color(self, to):
         """
@@ -87,13 +86,15 @@ class Node:
             self.change_color(color)
         else:
             self.logger.log(f'Node {id} was assigned color: "{color}"')
-    
+
     def print_node_colors(self):
         for node_id in range(self.max_node_id + 1):
             if node_id in self.node_colors.keys():
-                self.logger.log(f'NODE-{node_id + 1} color: {self.node_colors[node_id]}')
+                self.logger.log(
+                    f'NODE-{node_id + 1} color: {self.node_colors[node_id]}')
             else:
-                self.logger.log(f'NODE-{node_id + 1} color: N/A (disconnected)')
+                self.logger.log(
+                    f'NODE-{node_id + 1} color: N/A (disconnected)')
 
     def read_next_message(self, timeout_secs=None) -> Union[Message, None]:
         """
@@ -121,8 +122,7 @@ class Node:
 
         while True:
             if self.master_id is None:
-                self.logger.log('Master is unknown, trying to find it')
-                self.election_mode()
+                self.election()
 
                 if self.master_id is None:
                     # If we still don't know the master, sleep for a while
@@ -131,20 +131,12 @@ class Node:
 
             if self.is_master:
                 self.setup_colors()
-                self.logger.log('Master setup complete')
+                self.logger.log('Color setup complete')
                 self.master_loop()
             else:
-                self.slave_setup()
-                if self.color == 'init':
-                    self.logger.log('Slave setup failed')
-                    self.master_id = None
-                    time.sleep(ELECTION_UNSUCESSFUL_SLEEP_SECS)
-                    continue
-
-                self.logger.log('Slave setup complete')
                 self.slave_loop()
 
-    def election_mode(self):
+    def election(self):
         """
         Begins establishing master node in the network
         """
@@ -160,7 +152,22 @@ class Node:
                 value=self.id,
             )
 
-        self.handle_election_messages()
+        self.surrendered = False  # flag to keep if we received a surrender message
+        while True:
+            message = self.read_next_message(
+                timeout_secs=ELECTION_MSG_TIMEOUT_SECS)
+
+            if message is None:
+                if not self.surrendered:
+                    self.declare_self_as_master()
+                break
+
+            if message.key != 'election':
+                continue  # Ignore non-election messages
+
+            election_finished = self.handle_election_message(message)
+            if election_finished:
+                break
 
     def handle_election_message(self, message: Message):
         """
@@ -199,28 +206,6 @@ class Node:
 
         return False
 
-    def handle_election_messages(self):
-        """
-        Handles election messages from other nodes
-        """
-
-        self.surrendered = False  # flag to keep if we received a surrender message
-        while True:
-            message = self.read_next_message(
-                timeout_secs=ELECTION_MSG_TIMEOUT_SECS)
-
-            if message is None:
-                if not self.surrendered:
-                    self.declare_self_as_master()
-                break
-
-            if message.key != 'election':
-                continue  # Ignore non-election messages
-
-            election_finished = self.handle_election_message(message)
-            if election_finished:
-                break
-
     def declare_self_as_master(self):
         """
         Declares self as the master node, sending broadcast victory
@@ -234,10 +219,13 @@ class Node:
 
     def find_active_nodes(self):
         """
-        Finds all active nodes in the network
+        Finds all active nodes in the network. 
+        Clears internal state of alive nodes and their colors
         """
 
         self.alive_nodes.clear()
+        self.node_colors.clear()
+        self.uncolored_nodes.clear()
         # Send broadcast to all nodes with heartbeat request
         for node_id in range(self.max_node_id):
             if node_id == self.id:
@@ -250,13 +238,16 @@ class Node:
             )
 
         # Wait for the responses
+        # To not get stuck in an infinite loop we need to wait maximum of "X" seconds, otherwise the nodes
+        # will just be trying to send heartbeat signal to the master to ensure it is alive
+        search_start = time.time()
         while True:
             if len(self.alive_nodes) == self.max_node_id + 1:
                 break
 
             message = self.read_next_message(
                 timeout_secs=HEARTBEAT_INTERVAL_SECS)
-            if message is None or message.key != 'heartbeat':
+            if message is None or message.key != 'heartbeat' or time.time() - search_start > NODE_ALIVE_TIMEOUT_SECS:
                 break
 
             # Node is alive when it responds or sends a request
@@ -276,7 +267,7 @@ class Node:
         """
 
         # 1/3 of the nodes are green, the rest is red
-        n_green = math.ceil(len(self.alive_nodes) / 3)
+        n_green = math.ceil((len(self.alive_nodes) + 1) / 3)
         n_green -= 1  # - 1 for the master node
         self.assign_color(self.id, 'green')
 
@@ -301,19 +292,23 @@ class Node:
         Ensures that all nodes have assigned colors
         """
 
-        # TODO better timeout - or just remove the color response
+        # Similarly to color the nodes we have some fixed timeout to wait for the responses
+        color_assignment_start = time.time()
         while True:
             if len(self.uncolored_nodes) == 0:
                 break
-            
+
             message = self.read_next_message(HEARTBEAT_INTERVAL_SECS)
-            if message is None:
+            if message is None or time.time() - color_assignment_start > COLOR_ASSIGNMENT_SECS:
                 break
 
             if message.key == 'color':
                 self.uncolored_nodes.remove(message.sender_id)
                 self.assign_color(message.sender_id, message.value)
+                color_assignment_start = time.time()
+                continue
 
+            # We also need to respond to heartbeats
             if message.key == 'heartbeat' and message.value == 'request':
                 self.messenger.send_message(
                     node_id=message.sender_id,
@@ -328,7 +323,7 @@ class Node:
         Runs master setup - setups color for every alive node in the cluster
         """
 
-        self.logger.log('Attempting to color the nodes')
+        self.logger.log('Setting up node colors')
 
         # Find active nodes
         self.find_active_nodes()
@@ -342,35 +337,6 @@ class Node:
             self.logger.log('Error, not all nodes have been colored')
 
         self.print_node_colors()
-
-    def slave_setup(self):
-        """
-        Runs cluster setup for slave node
-        """
-
-        self.logger.log('Running setup for slave mode')
-        self.change_color('slave')
-
-        while True:
-            message = self.read_next_message(COLOR_ASSIGNMENT_SECS)
-            if message is None:
-                break
-
-            if message.key == 'color':
-                self.change_color(message.value)
-                self.messenger.send_message(
-                    node_id=self.master_id,
-                    endpoint='color',
-                    value=self.color
-                )
-                break
-
-            if message.key == 'heartbeat' and message.value == 'request':
-                self.messenger.send_message(
-                    node_id=self.master_id,
-                    endpoint='heartbeat',
-                    value='response',
-                )
 
     def slave_loop(self):
         """
@@ -408,17 +374,7 @@ class Node:
             message = self.read_next_message(HEARTBEAT_INTERVAL_SECS)
             if message is None:
                 continue
-
-            # If we get a heartbeat message we simply respond back
-            if message.key == 'heartbeat':
-                self.last_master_response = time.time()
-                if message.value == 'request':
-                    self.messenger.send_message(
-                        node_id=message.sender_id,
-                        endpoint='heartbeat',
-                        value='response',
-                    )
-
+            
             # If we get an election message we handle it in a handle_election_message
             # This can be e.g. new node joining the cluster or new master having been
             # elected
@@ -427,6 +383,17 @@ class Node:
                 new_master = self.handle_election_message(message)
                 if new_master:
                     return  # From here we will enter "slave_setup" again
+
+            self.last_master_response = time.time()
+            
+            # If we get a heartbeat message we simply respond back
+            if message.key == 'heartbeat' and message.sender_id == self.master_id:
+                if message.value == 'request':
+                    self.messenger.send_message(
+                        node_id=message.sender_id,
+                        endpoint='heartbeat',
+                        value='response',
+                    )
 
             # Lastly we handle the color message
             if message.key == 'color':
@@ -453,7 +420,8 @@ class Node:
         now = time.time()
         for node_id, last_response in last_slave_responses.items():
             if now - last_response > NODE_ALIVE_TIMEOUT_SECS:
-                self.logger.log(f'Node {node_id} did not respond, recoloring...')
+                self.logger.log(
+                    f'Node {node_id} did not respond, recoloring...')
                 return True
 
             if now - last_response > HEARTBEAT_INTERVAL_SECS:
@@ -475,6 +443,7 @@ class Node:
         # At the start we assume that all slaves are alive
         last_slave_responses = {}
 
+        # Send heartbeat to all slaves
         for node_id in self.alive_nodes:
             self.messenger.send_message(
                 node_id=node_id,
@@ -485,9 +454,8 @@ class Node:
 
         while True:
             message = self.read_next_message(HEARTBEAT_INTERVAL_SECS)
-            if message is None:
-                continue
 
+            # Check whether we need to recolor the cluster
             requires_recoloring = self.handle_cluster_status(
                 last_slave_responses)
             if requires_recoloring:
@@ -495,8 +463,14 @@ class Node:
                 # I.e. exit this loop which will result in setup_colors being
                 # run again
                 return
+            
+            if message is None:
+                continue
 
-            if message.key == 'heartbeat':
+            # We also want to ignore nodes that are not "alive" unless they try to
+            # start election - in which case we simply return them that we are the master
+            # we can simply filter them by checking if they are in self.alive_nodes
+            if message.key == 'heartbeat' and message.sender_id in self.alive_nodes:
                 last_slave_responses[message.sender_id] = time.time()
                 if message.value == 'request':
                     self.messenger.send_message(
@@ -505,6 +479,7 @@ class Node:
                         value='response',
                     )
 
+            # Otherwise check if election
             if message.key == 'election':
                 new_master = self.handle_election_message(message)
                 if new_master:
