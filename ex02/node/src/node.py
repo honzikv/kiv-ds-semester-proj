@@ -10,15 +10,15 @@ from node_logger import NodeLogger
 from messenger import Messenger
 from timeout import Timeout
 
-ELECTION_MSG_READ_RATE = 5
-ELECTION_UNSUCESSFUL_SLEEP_SECS = 5
-HEARTBEAT_INTERVAL_SECS = 3
-COLOR_ASSIGNMENT_SECS = 8
-NODE_ALIVE_TIMEOUT_SECS = 10
+ELECTION_MSG_MAX_SLEEP_TIME = 2  # max time waiting for election queue message
+ELECTION_UNSUCESSFUL_SLEEP_SECS = 3  # sleep time for unsuccessful election
+HEARTBEAT_INTERVAL_SECS = 5  # minimum time between heartbeats
 
 # Timeouts
-MAX_ELECTION_DURATION_SECS = 12
-MAX_ELECTION_EXTENSION_SECS = 5
+MAX_ELECTION_DURATION_SECS = 15
+MAX_ELECTION_EXTENSION_SECS = 10
+NODE_ALIVE_TIMEOUT_SECS = 10
+COLOR_ASSIGNMENT_TIMEOUT = 5  # maximum time for all nodes to assign a color
 
 
 class Node:
@@ -125,8 +125,12 @@ class Node:
                     continue
 
             if self.is_master:
-                self.setup_colors()
-                self.logger.log('Color setup complete 🎨')
+                colors_assigned = False
+                while not colors_assigned:
+                    colors_assigned = self.setup_colors()
+                    
+                self.logger.log('Colors were setup correctly!')
+                self.print_node_colors()
                 self.master_loop()
             else:
                 self.slave_loop()
@@ -153,7 +157,7 @@ class Node:
 
         election_timeout = Timeout(MAX_ELECTION_DURATION_SECS)
         while True:
-            message = self.read_next_message(ELECTION_MSG_READ_RATE)
+            message = self.read_next_message(ELECTION_MSG_MAX_SLEEP_TIME)
             if election_timeout.timed_out():
                 if not self.surrendered:
                     self.declare_self_as_master()
@@ -199,7 +203,7 @@ class Node:
             self.surrendered = True
         elif isinstance(message.value, int) and message.value < self.id:
             self.logger.log(
-                f'Found node with lower id (NODE-{message.value}), sending surrender message...')
+                f'Found node with lower id (NODE-{message.value + 1}), sending surrender message...')
             self.messenger.send_message(
                 node_id=message.sender_id,
                 endpoint='election',
@@ -237,6 +241,8 @@ class Node:
             self.is_master = False
             self.logger.log(f'Master (NODE-{self.master_id + 1}) has been established via victory message. Stopping master loop...')
             return True
+        else:
+            self.logger.log(f'MESSAGE:::::: {message}')
 
         return False
 
@@ -329,12 +335,12 @@ class Node:
         """
 
         # Similarly to color the nodes we have some fixed timeout to wait for the responses
-        color_assignment_timeout = Timeout(COLOR_ASSIGNMENT_SECS)
+        color_assignment_timeout = Timeout(COLOR_ASSIGNMENT_TIMEOUT)
         while True:
             if len(self.uncolored_nodes) == 0:
                 break
 
-            message = self.read_next_message(COLOR_ASSIGNMENT_SECS)
+            message = self.read_next_message(COLOR_ASSIGNMENT_TIMEOUT)
             if message is None or color_assignment_timeout.timed_out():
                 break
 
@@ -355,23 +361,24 @@ class Node:
 
     def setup_colors(self):
         """
-        Runs master setup - setups color for every alive node in the cluster
+        Setups colors for each node in the cluster
         """
 
-        self.logger.log('Setting up node colors')
+        self.logger.log('Setting up node colors...')
 
         # Find active nodes
         self.find_active_nodes()
 
         # Color the nodes
         self.assign_colors()
-
+        
         if self.all_colors_assigned():
-            self.logger.log('All nodes have been colored')
-        else:
-            self.logger.log('Error, not all nodes have been colored')
+            self.logger.log('All nodes have been colored.')
+            return True
+        
+        self.logger.log('Error, not all nodes have been colored, retrying...')
+        return False
 
-        self.print_node_colors()
 
     def slave_loop(self):
         """
@@ -474,18 +481,21 @@ class Node:
 
         # Create timeouts for each slave
         # Each slave must send heartbeat request to master which will update its timeout
+        check_for_timeouts = Timeout(NODE_ALIVE_TIMEOUT_SECS / 2)
         slave_timeouts = {
             slave_id: Timeout(NODE_ALIVE_TIMEOUT_SECS) for slave_id in self.alive_nodes
         }
 
         while True:
-            message = self.read_next_message(1)
+            message = self.read_next_message(0.5)
 
-            if self.any_slave_timed_out(slave_timeouts):
-                # Some node is unavailable - begin recoloring the nodes
-                # I.e. exit this loop which will result in setup_colors being
-                # run again
-                return
+            if check_for_timeouts.timed_out():
+                if self.any_slave_timed_out(slave_timeouts):
+                    # Some node is unavailable - begin recoloring the nodes
+                    # I.e. exit this loop which will result in setup_colors being
+                    # run again
+                    return
+                check_for_timeouts.reset()
 
             if message is None:
                 # If no message is avaialble continue sleeping

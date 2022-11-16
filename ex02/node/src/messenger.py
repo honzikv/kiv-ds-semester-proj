@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import requests
 
-DEFAULT_TIMEOUT_SECS = 1
+DEFAULT_TIMEOUT_SECS = 3
 
 
 class Messenger:
@@ -32,7 +32,7 @@ class Messenger:
     def __del__(self):
         self.thread_pool_executor.shutdown()
 
-    def send_message_sync(self, node_id, endpoint: str, value):
+    def send_message_sync(self, node_id: int, endpoint: str, value):
         try:
             return requests.post(
                 url=f'{self.node_addrs[node_id]}/{endpoint}',
@@ -59,7 +59,7 @@ class Messenger:
         # self.send_message_sync(node_id, endpoint, value)
         
 
-    def broadcast(self, endpoint, value):
+    def broadcast(self, endpoint: str, value):
         """
         Broadcasts message to all nodes
 

@@ -3,7 +3,7 @@ class Message:
     Simple object that is send via sockets
     """
 
-    def __init__(self, key, value, sender):
+    def __init__(self, key: str, value, sender: int):
         """
         Constructor for the message - we use simple key-value pairs that are pickled and sent via sockets
         Args:
@@ -11,6 +11,7 @@ class Message:
             value: value of the message
             sender: id of the sender
         """
+        
         self.key = key
         self.value = value
         self.sender_id = sender

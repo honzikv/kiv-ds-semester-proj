@@ -8,7 +8,6 @@ import fastapi
 import argparse
 import uvicorn
 import os
-import requests
 from message import Message
 from node import Node
 
@@ -108,9 +107,9 @@ def main():
     thread.start()
 
     # Disable uvicorn logging for readability
-    uvicorn_error = logging.getLogger("uvicorn.error")
+    uvicorn_error = logging.getLogger('uvicorn.error')
     uvicorn_error.disabled = True
-    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access = logging.getLogger('uvicorn.access')
     uvicorn_access.disabled = True
     uvicorn.run(app, host=hostname, port=port, log_level='critical')
 

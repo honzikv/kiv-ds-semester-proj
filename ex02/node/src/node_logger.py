@@ -19,13 +19,13 @@ class NodeLogger:
         Args:
             message (str): message to log
         """
-        
+
         localtime = time.localtime()
         current_time = time.strftime('%H:%M:%S', localtime)
-        msg = f'[{current_time}] NODE-{self.id + 1} {message}'
+        msg = f'[{current_time}] (NODE-{self.id + 1}): {message}'
         print(msg, flush=True)  # flush is needed otherwise
         # it does not show in the terminal right away
-        
+
         # Write to file
         with open(self.log_file, 'a', encoding='utf-8') as file:
             file.write(msg + '\n')
