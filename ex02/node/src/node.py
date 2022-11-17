@@ -189,7 +189,7 @@ class Node:
             str: to signal whether to exit the election loop
         """
 
-        if message.value == 'victory':
+        if message.value == 'victory' and self.id < message.sender_id:
             # We have received a victory message from another node
             if self.master_id is not None and self.master_id == message.sender_id:
                 return False
