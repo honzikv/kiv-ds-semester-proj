@@ -12,15 +12,15 @@ from timeout import Timeout
 from exceptions import ElectionUnsuccessfulException, ClusterResetException
 
 # max time waiting for election queue message
-ELECTION_MSG_QUEUE_SLEEP_INTERVAL = 2
+ELECTION_MSG_QUEUE_SLEEP_SECS = 2
 ELECTION_UNSUCESSFUL_SLEEP_SECS = 3  # sleep time for unsuccessful election
 HEARTBEAT_INTERVAL_SECS = 5  # minimum time between heartbeats
 
 # Timeouts
 MAX_ELECTION_DURATION_SECS = 15
-MAX_ELECTION_EXTENSION_SECS = 10
-NODE_ALIVE_TIMEOUT_SECS = 10
-COLOR_ASSIGNMENT_TIMEOUT = 5  # maximum time for all nodes to assign a color
+ELECTION_EXTENSION_SECS = 10
+NODE_ALIVE_TIMEOUT_SECS = 15
+MAX_COLOR_ASSIGNMENT_DURATION_SECS = 10  # maximum time for all nodes to assign a color
 
 
 class Node:
@@ -157,7 +157,7 @@ class Node:
         # Setup election timeout
         election_timeout = Timeout(MAX_ELECTION_DURATION_SECS)
         while True:
-            message = self.read_next_message(ELECTION_MSG_QUEUE_SLEEP_INTERVAL)
+            message = self.read_next_message(ELECTION_MSG_QUEUE_SLEEP_SECS)
             if election_timeout.timed_out():
                 if not self.surrendered:
                     self.declare_self_as_master()
@@ -191,6 +191,9 @@ class Node:
 
         if message.value == 'victory':
             # We have received a victory message from another node
+            if self.master_id is not None and self.master_id == message.sender_id:
+                return False
+            
             self.master_id = message.sender_id
             self.is_master = False
             self.logger.log(
@@ -205,7 +208,7 @@ class Node:
 
             if timeout is not None:
                 # In case timeout is used extend it so that we give master time to announce the results
-                timeout.extend(MAX_ELECTION_EXTENSION_SECS)
+                timeout.extend(ELECTION_EXTENSION_SECS)
 
             self.surrendered = True
 
@@ -220,7 +223,7 @@ class Node:
 
         return False
 
-    def check_for_cluster_reset(self, message: Message, finding_active_nodes=False):
+    def check_for_cluster_changes(self, message: Message, finding_active_nodes=False):
         """
         Used in master loop - returns True if cluster reconfiguration is necessary.
         This may be caused by new node joining the cluster, or by node with higher id joining
@@ -240,13 +243,13 @@ class Node:
                 node_id=message.sender_id,
             )
             # New node joined the cluster, we need to recolor the nodes
-            if not finding_active_nodes:
+            if not finding_active_nodes and message.sender_id not in self.alive_nodes:
                 raise ClusterResetException(
                     f'Detected new node (NODE-{message.value + 1}) trying to join the cluster, sending victory message and recoloring the cluster...')
 
         # If we receive victory we need to stop master loop immediately and
         # start slave loop
-        elif message.value == 'victory':
+        elif message.value == 'victory' and message.sender_id > self.id:
             self.master_id = message.sender_id
             self.is_master = False
             raise ClusterResetException(
@@ -262,14 +265,12 @@ class Node:
         self.master_id = self.id
         self.logger.log(f'Declaring self as master')
         self.messenger.broadcast('election', 'victory')
+        self.change_color('master')
 
-    def find_active_nodes(self) -> bool:
+    def find_active_nodes(self):
         """
         Finds all active nodes in the network. 
         Clears internal state of alive nodes and their colors
-
-        Returns:
-            bool: True if cluster reset is required, False otherwise
         """
 
         self.alive_nodes.clear()
@@ -300,7 +301,7 @@ class Node:
             if message is None or search_timeout.timed_out():
                 break
 
-            self.check_for_cluster_reset(message, finding_active_nodes=True)
+            self.check_for_cluster_changes(message, finding_active_nodes=True)
 
             # Node is alive when it responds or sends a request
             if message.value == 'request':
@@ -347,16 +348,19 @@ class Node:
         """
 
         # Similarly to color the nodes we have some fixed timeout to wait for the responses
-        color_assignment_timeout = Timeout(COLOR_ASSIGNMENT_TIMEOUT)
+        color_assignment_timeout = Timeout(MAX_COLOR_ASSIGNMENT_DURATION_SECS)
         while True:
             if len(self.uncolored_nodes) == 0:
                 break
 
-            message = self.read_next_message(COLOR_ASSIGNMENT_TIMEOUT)
+            message = self.read_next_message(MAX_COLOR_ASSIGNMENT_DURATION_SECS)
             if message is None or color_assignment_timeout.timed_out():
                 break
 
-            self.check_for_cluster_reset(message)
+            self.check_for_cluster_changes(message)
+            
+            if message.sender_id not in self.alive_nodes:
+                continue
 
             if message.key == 'color':
                 self.uncolored_nodes.remove(message.sender_id)
@@ -406,10 +410,9 @@ class Node:
             endpoint='heartbeat',
             value='request',
         )
-        # We assume
 
         heartbeat_timeout = Timeout(HEARTBEAT_INTERVAL_SECS)
-        self.master_timeout = Timeout(NODE_ALIVE_TIMEOUT_SECS)
+        self.master_timeout = Timeout(NODE_ALIVE_TIMEOUT_SECS * 1.5)
         self.change_color('slave')
         while True:
             # If master did not respond until timeout start election
@@ -507,7 +510,7 @@ class Node:
                 # If no message is avaialble continue sleeping
                 continue
 
-            self.check_for_cluster_reset(message)
+            self.check_for_cluster_changes(message)
 
             if message.sender_id not in self.alive_nodes:
                 continue
