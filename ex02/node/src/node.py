@@ -19,8 +19,9 @@ HEARTBEAT_INTERVAL_SECS = 5  # minimum time between heartbeats
 # Timeouts
 MAX_ELECTION_DURATION_SECS = 15
 ELECTION_EXTENSION_SECS = 10
-NODE_ALIVE_TIMEOUT_SECS = 15
-MAX_COLOR_ASSIGNMENT_DURATION_SECS = 10  # maximum time for all nodes to assign a color
+NODE_ALIVE_TIMEOUT_SECS = 10
+# maximum time for all nodes to assign a color
+MAX_COLOR_ASSIGNMENT_DURATION_SECS = 10
 
 
 class Node:
@@ -33,7 +34,8 @@ class Node:
                  id: int,
                  node_addrs: list,
                  message_queue: queue.Queue,
-                 log_file: os.path):
+                 log_file: os.path,
+                 n_color_tries=3):
         """
         Used to create new node - one per process / machine
 
@@ -43,6 +45,7 @@ class Node:
             node_addrs (list): list of all nodes including "this" one
             log_file (os.path): path to the log file - this file will be 
                                 erased and used for logging
+            n_color_tries (int): number of tries when coloring node before resetting alive nodes
         """
 
         self.node_addrs = node_addrs
@@ -56,9 +59,10 @@ class Node:
         self.surrendered = False
 
         # Structures to keep track of alive / colored nodes (used in master mode)
-        self.alive_nodes = set()
-        self.node_colors = {}
-        self.uncolored_nodes = set()
+        self.alive_nodes = set()  # all nodes that are alive
+        self.node_colors = {}  # colors of all nodes
+        self.nodes_to_color = {}  # remaining nodes that are yet to be colored
+        self.n_color_tries = n_color_tries
 
         # Create logger and messenger helper objects
         self.logger = NodeLogger(id, log_file)
@@ -193,7 +197,7 @@ class Node:
             # We have received a victory message from another node
             if self.master_id is not None and self.master_id == message.sender_id:
                 return False
-            
+
             self.master_id = message.sender_id
             self.is_master = False
             self.logger.log(
@@ -275,7 +279,7 @@ class Node:
 
         self.alive_nodes.clear()
         self.node_colors.clear()
-        self.uncolored_nodes.clear()
+        self.nodes_to_color.clear()
 
         # Send broadcast to all nodes with heartbeat request
         for node_id in range(self.max_node_id + 1):
@@ -317,7 +321,7 @@ class Node:
     def assign_colors(self):
         """
         Assigns colors to all nodes that are alive (in self.alive_nodes)
-
+        and saves them to self.nodes_to_color
         """
 
         # 1/3 of the nodes are green, the rest is red
@@ -331,16 +335,7 @@ class Node:
         random.shuffle(nodes)
 
         for idx, node_id in enumerate(nodes):
-            self.messenger.send_message(
-                node_id=node_id,
-                endpoint='color',
-                # First n_green nodes are green, the rest is red
-                value='green' if idx < n_green else 'red',
-            )
-
-        # Uncolored nodes set is used to keep track of nodes that are yet
-        # to respond
-        self.uncolored_nodes = set(nodes)
+            self.nodes_to_color[node_id] = 'green' if idx < n_green else 'red'
 
     def all_colors_assigned(self):
         """
@@ -350,20 +345,21 @@ class Node:
         # Similarly to color the nodes we have some fixed timeout to wait for the responses
         color_assignment_timeout = Timeout(MAX_COLOR_ASSIGNMENT_DURATION_SECS)
         while True:
-            if len(self.uncolored_nodes) == 0:
+            if len(self.nodes_to_color) == 0:
                 break
 
-            message = self.read_next_message(MAX_COLOR_ASSIGNMENT_DURATION_SECS)
+            message = self.read_next_message(
+                MAX_COLOR_ASSIGNMENT_DURATION_SECS)
             if message is None or color_assignment_timeout.timed_out():
                 break
 
             self.check_for_cluster_changes(message)
-            
+
             if message.sender_id not in self.alive_nodes:
                 continue
 
             if message.key == 'color':
-                self.uncolored_nodes.remove(message.sender_id)
+                del self.nodes_to_color[message.sender_id]
                 self.node_colors[message.sender_id] = message.value
                 continue
 
@@ -375,7 +371,7 @@ class Node:
                     value='response',
                 )
 
-        return len(self.uncolored_nodes) == 0
+        return len(self.nodes_to_color) == 0
 
     def setup_colors(self):
         """
@@ -386,14 +382,25 @@ class Node:
 
         # Find active nodes
         self.find_active_nodes()
-
-        # Color the nodes
+        
+        n_tries = self.n_color_tries
         self.assign_colors()
 
-        if self.all_colors_assigned():
-            self.logger.log('All nodes have been colored.')
-            self.print_node_colors()
-            return
+        # Color the nodes
+        while n_tries > 0:
+            for node_id, color in self.nodes_to_color.items():
+                self.messenger.send_message(
+                    node_id=node_id,
+                    endpoint='color',
+                    value=color,
+                )
+
+            if self.all_colors_assigned():
+                self.logger.log('All nodes have been colored.')
+                self.print_node_colors()
+                return
+            else:
+                n_tries -= 1
 
         raise ClusterResetException(
             'Error, not all nodes have been colored, retrying...')
@@ -412,7 +419,7 @@ class Node:
         )
 
         heartbeat_timeout = Timeout(HEARTBEAT_INTERVAL_SECS)
-        self.master_timeout = Timeout(NODE_ALIVE_TIMEOUT_SECS * 1.5)
+        self.master_timeout = Timeout(NODE_ALIVE_TIMEOUT_SECS)
         self.change_color('slave')
         while True:
             # If master did not respond until timeout start election
@@ -454,14 +461,15 @@ class Node:
 
             # If we get a heartbeat message we simply respond back
             if message.key == 'heartbeat':
-                self.logger.log(
-                    f'Received heartbeat from master (NODE-{self.master_id + 1})')
                 if message.value == 'request':
                     self.messenger.send_message(
                         node_id=message.sender_id,
                         endpoint='heartbeat',
                         value='response',
                     )
+                else:
+                    self.logger.log(
+                        f'Received heartbeat response from master (NODE-{self.master_id + 1})')
 
             # Lastly we handle the color message
             if message.key == 'color':
