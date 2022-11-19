@@ -100,7 +100,7 @@ Each node has its own log file in the `ex02` directory that is created automatic
 This log file contains all the information logged by the node during its lifetime - alternatively, this
 is also logged in the standard output of the node, accessible e.g. via Docker Desktop application.
 
-Example output for a 5-node system:
+### Example output for a 5-node system
 
 All nodes are running:
 ```
