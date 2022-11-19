@@ -11,7 +11,6 @@ class Message:
             value: value of the message
             sender: id of the sender
         """
-        
         self.key = key
         self.value = value
         self.sender_id = sender

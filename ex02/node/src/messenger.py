@@ -20,17 +20,13 @@ class Messenger:
             node_addrs (list): list of all node addresses
             timeout (_type_, optional): Request timeout. Defaults to DEFAULT_TIMEOUT_SECS.
         """
-
         self.id = id
         self.node_addrs = node_addrs
         self.timeout = timeout
-        
+
         # To send requests async we create a thread pool executor which performs requests.post
         # for every message sent
-        self.thread_pool_executor = ThreadPoolExecutor(max_workers=3)
-    
-    def __del__(self):
-        self.thread_pool_executor.shutdown()
+        self.thread_pool_executor = ThreadPoolExecutor(max_workers=5)
 
     def send_message_sync(self, node_id: int, endpoint: str, value):
         try:
@@ -53,11 +49,9 @@ class Messenger:
         Returns:
             bool: True if message was sent successfully, False otherwise
         """
-        
         # Result is actually not relevant for us, we just don't want to block the caller thread
-        self.thread_pool_executor.submit(self.send_message_sync, node_id, endpoint, value)
-        # self.send_message_sync(node_id, endpoint, value)
-        
+        self.thread_pool_executor.submit(
+            self.send_message_sync, node_id, endpoint, value)
 
     def broadcast(self, endpoint: str, value):
         """
@@ -68,7 +62,6 @@ class Messenger:
             value (any): value to send, must be JSON serializable i.e.
                             int, float, str, bool, list, dict, None
         """
-
         for node_id in range(len(self.node_addrs)):
             if node_id != self.id:
                 self.send_message(

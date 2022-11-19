@@ -4,7 +4,7 @@ from typing import Union
 
 class Timeout:
     """
-    Simple time wrapper for measuring timeouts
+    Simple wrapper to measure timeouts for readability
     """
 
     def __init__(self, secs: Union[float, int]) -> None:
@@ -13,7 +13,6 @@ class Timeout:
         Args:
             secs (Union[float, int]): timeout length in seconds
         """
-
         self.secs = secs
         self.start = time.time()
 
@@ -24,7 +23,6 @@ class Timeout:
         Returns:
             bool: True if timed out, False otherwise
         """
-
         return time.time() - self.start > self.secs
 
     def extend(self, additional: Union[float, int]):
@@ -34,7 +32,6 @@ class Timeout:
         Args:
             additional (Union[float, int]): additional amount of seconds to add to the timeout
         """
-
         self.secs += additional
 
     def reset(self):
@@ -42,5 +39,4 @@ class Timeout:
         Resets the timeout. 
         Note that extended timeouts will not reset to the original timeout value
         """
-
         self.start = time.time()

@@ -8,9 +8,16 @@ class NodeLogger:
     """
 
     def __init__(self, id: int, log_file: os.path):
+        """
+        Creates new logger
+
+        Args:
+            id (int): node's id
+            log_file (os.path): path to the log file
+        """
         self.id = id
         self.log_file = log_file
-        open(self.log_file, 'w').close()
+        open(self.log_file, 'w').close()  # clear log file
 
     def log(self, message):
         """
@@ -19,7 +26,6 @@ class NodeLogger:
         Args:
             message (str): message to log
         """
-
         localtime = time.localtime()
         current_time = time.strftime('%H:%M:%S', localtime)
         msg = f'[{current_time}] (NODE-{self.id + 1}): {message}'
