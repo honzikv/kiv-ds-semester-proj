@@ -283,8 +283,6 @@ class Node:
             self.check_for_cluster_changes(message)
 
             if message.key != 'heartbeat':
-                self.logger.log(
-                    'find_active_nodes: Received unexpected message: ' + str(message))
                 continue
 
             if message.sender_id not in self.alive_nodes:
@@ -453,13 +451,10 @@ class Node:
             if message is None:
                 continue
 
-            # self.logger.log(f'Received message: {message}')
-
             if self.check_for_cluster_changes(message):
                 return
 
             if message.sender_id == self.master_id:
-                # self.logger.log('Resetting master timeout')
                 self.master_timeout.reset()
 
             # If we get a heartbeat message we simply respond back
