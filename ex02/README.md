@@ -1,4 +1,4 @@
-# Exercise 01 - Single master selection in a distributed system
+# Exercise 02 - Single master selection in a distributed system with failure detection
 
 This application demonstrates simple master selection in a distributed system
 simulated via Vagrant and Docker.
