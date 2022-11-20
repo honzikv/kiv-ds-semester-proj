@@ -99,10 +99,10 @@ def main():
         # This would not be optimal for a real production system but will suffice for this
         while True:
             try:
+                time.sleep(REQ_INTERVAL)
                 api_logger.info('Trying to reach API...')
                 res = requests.get(f'{api_url}/healthcheck')  # this will block until conn is established
                 if res.status_code != 200:
-                    time.sleep(REQ_INTERVAL)
                     continue
             except:
                 pass

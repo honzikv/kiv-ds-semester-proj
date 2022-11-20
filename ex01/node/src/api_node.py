@@ -10,7 +10,7 @@ import requests
 from message import Message
 import logging
 
-ELECTION_TIMEOUT = 10
+ELECTION_TIMEOUT = 20
 HEARTBEAT_TIMEOUT_SECS = 4
 COLOR_ASSIGNMENT_TIMEOUT_SECS = 30
 received_messages = queue.Queue(maxsize=4096)
@@ -128,6 +128,7 @@ class Node:
         """
         Begins to establish master in the network.
         """
+
         self.log_message('Attempting to establish new master')
         # If we are the highest id in the cluster we must be the master
         # So just broadcast to all other nodes to surrender
@@ -152,13 +153,12 @@ class Node:
         last_election_message_time = time.time()
         while True:
             message = read_next_message_from_queue(timeout_secs=ELECTION_TIMEOUT)
-            if message is None or (
-                    message.key != 'election' and time.time() - last_election_message_time > ELECTION_TIMEOUT):
+            if message is None or message.key != 'election':
                 if not self.surrendered:
                     self.declare_self_as_master()
                 break
 
-            last_election_message_time = time.time()
+            # last_election_message_time = time.time()
 
             if message.value == 'victory':
                 # We have received a victory message from another node
@@ -210,7 +210,7 @@ class Node:
         Assigns colors to all nodes
         """
 
-        n_green = math.floor(len(self.alive_nodes) / 3)
+        n_green = math.ceil(len(self.alive_nodes) / 3)
         n_green -= 1  # -1 for master node
 
         # Change color for this node since it is the master
