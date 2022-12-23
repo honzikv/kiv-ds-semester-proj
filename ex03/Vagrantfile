@@ -1,0 +1,122 @@
+VAGRANTFILE_API_VERSION = "2"
+
+# Configure Vagrant to be usable with Docker
+ENV['VAGRANT_DEFAULT_PROVIDER'] = 'docker'
+ENV['FORWARD_DOCKER_PORTS'] = true
+ENV['VAGRANT_NO_PARALLEL'] = false
+ENV['VAGRANT_EXPERIMENTAL'] = 'typed_triggers'
+unless Vagrant.has_plugin?("vagrant-docker-compose")
+    system("vagrant plugin install vagrant-docker-compose")
+    puts "Dependencies installed, please try the command again."
+    exit
+  end
+
+# Docker images
+ZOONODE_IMAGE = 'zoonode:1.0'
+CLIENT_IMAGE = 'client:1.0'
+ZOONAVIGATOR_IMAGE = 'elkozmon/zoonavigator:latest'
+
+# Localhost config
+SUBNET = '10.0.1'
+
+# Node definitions
+ZOONODE = {
+    :nameprefix => 'zoonode-',
+    :subnet => SUBNET,
+    :ip_offset => 10,
+    :image => ZOONODE_IMAGE,
+}
+
+CLIENT = {
+    :nameprefix => 'client-',
+    :subnet => SUBNET,
+    :ip_offset => 66,
+    :image => CLIENT_IMAGE,
+}
+
+# Number of zoo nodes and clients to start
+N_ZOONODES = 5
+N_CLIENTS = 2
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+
+    # Build the zoo node images
+    config.trigger.before :up, type: :command do |trigger|
+        trigger.name = "Build docker images and configuration files"
+        trigger.ruby do |env, machine|
+            # --- start of Ruby script ---
+            # Build Zoonode list:
+            puts "Building Zoonode configuration."
+            zoo_ensemble = []
+            zoo_hosts = []
+            (1..ZOONODES_COUNT).each do |i|
+                zoo_ensemble << "server.#{i}=#{ZOONODE[:subnet]}#{ZOONODE[:ip_offset] + i}:2888:3888;2181"
+                zoo_hosts << "#{ZOONODE[:subnet]}#{ZOONODE[:ip_offset] + i}:2181"
+                # create volumes for persistent data '/opt/zk/data' if the don't exists
+                `docker volume inspect zoonode_data_#{i} || docker volume create zoonode_data_#{i}`
+            end
+            zoo_servers = zoo_ensemble.join(" ")
+            zoo_client_hosts = zoo_hosts.join(",")
+            # Build Zoonode image:
+            puts "Building Zoonode image:"
+            `docker build zoonode -t "#{ZOONODE_IMAGE}"`
+            # Build client node image:
+            puts "Building client node image:"
+            `docker build client -t "#{CLIENT_IMAGE}"`
+            # --- end of Ruby script ---
+        end
+  end
+
+  # Definition of N Zoonodes
+  (1..ZOONODES_COUNT).each do |i|
+    node_ip_addr = "#{ZOONODE[:subnet]}#{ZOONODE[:ip_offset] + i}"
+    node_name = "#{ZOONODE[:nameprefix]}#{i}"
+    # Definition of Zoonode
+    config.vm.define node_name do |s|
+      s.vm.network "private_network", ip: node_ip_addr
+      s.vm.hostname = node_name 
+      s.vm.provider "docker" do |d|
+        d.image = ZOONODE[:image]
+        d.name = node_name
+        d.has_ssh = true
+        d.env = { "ZOO_MY_ID" => i, "ZOO_SERVERS" => "#{zoo_servers}" }
+        d.create_args = [ "--volume=zoonode_data_#{i}:/opt/zk/data" ]
+      end
+      s.vm.post_up_message = "Node #{node_name} up and running. You can access the node with 'vagrant ssh #{node_name}'}"
+    end
+  end
+
+  # Definition of N client nodes
+  (1..CLIENTS_COUNT).each do |i|
+    node_ip_addr = "#{CLIENT[:subnet]}#{CLIENT[:ip_offset] + i}"
+    node_name = "#{CLIENT[:nameprefix]}#{i}"
+    # Definition of client node
+    config.vm.define node_name do |s|
+      s.vm.network "private_network", ip: node_ip_addr
+      s.vm.hostname = node_name
+      s.vm.provider "docker" do |d|
+        d.image = CLIENT[:image]
+        d.name = node_name
+        d.has_ssh = true
+        d.env = { "ZOO_SERVERS" => "#{zoo_client_hosts}" }
+      end
+      s.vm.post_up_message = "Node #{node_name} up and running. You can access the node with 'vagrant ssh #{node_name}'}"
+    end
+  end
+
+    # Definition of Zoonavigator
+    config.vm.define "zoonavigator" do |s|
+      s.vm.network "private_network", ip: "#{SUBNET}250"
+      s.vm.network "forwarded_port", guest: 9000, host: 9000, host_ip: "0.0.0.0"
+      s.vm.hostname = "zoonavigator"
+      s.vm.provider "docker" do |d|
+        d.image = ZOONAVIGATOR_IMAGE
+        d.name = "zoonavigator"
+        d.has_ssh = false
+        d.env = { "HTTP_PORT" => "9000" }
+      end
+      s.vm.post_up_message = "Node 'zoonavigator' up and running. You can access the node with 'vagrant ssh zoonode'}"
+    end
+  
+end
+
