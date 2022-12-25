@@ -1,6 +1,9 @@
-VAGRANTFILE_API_VERSION = "2"
+require 'json'
+
+
 
 # Configure Vagrant to be usable with Docker
+VAGRANTFILE_API_VERSION = "2"
 ENV['VAGRANT_DEFAULT_PROVIDER'] = 'docker'
 ENV['FORWARD_DOCKER_PORTS'] = true
 ENV['VAGRANT_NO_PARALLEL'] = false
@@ -20,23 +23,12 @@ ZOONAVIGATOR_IMAGE = 'elkozmon/zoonavigator:latest'
 SUBNET = '10.0.1'
 
 # Node definitions
-ZOONODE = {
-    :nameprefix => 'zoonode-',
-    :subnet => SUBNET,
-    :ip_offset => 10,
-    :image => ZOONODE_IMAGE,
-}
-
 CLIENT = {
     :nameprefix => 'client-',
     :subnet => SUBNET,
     :ip_offset => 66,
     :image => CLIENT_IMAGE,
 }
-
-# Number of zoo nodes and clients to start
-N_ZOONODES = 5
-N_CLIENTS = 2
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
