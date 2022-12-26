@@ -91,7 +91,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
                     'root_node' => ROOT_NODE,
                     'n_nodes' => N_NODES,
                     'api_port' => API_PORT,
-                    'startup_delay' => ROOT_NODE == node_name ? 0 : STARTUP_DELAY_SECS  # seconds
+                    'startup_delay' => ROOT_NODE == node_name ? 0 : STARTUP_DELAY_SECS,  # seconds
+                    'debug' => 'true'
                 }
             end
             s.vm.post_up_message = "#{node_name} is up and running. Access it via: vagrant ssh #{node_name}"

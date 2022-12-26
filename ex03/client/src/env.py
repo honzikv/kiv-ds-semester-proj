@@ -9,3 +9,11 @@ ROOT_NODE = os.environ['root_node']
 N_NODES = int(os.environ['n_nodes'])
 API_PORT = int(os.environ['api_port'])
 STARTUP_DELAY = int(os.environ['startup_delay'])
+
+if os.environ['debug']:
+    print(f'ZOOKEEPER = {ZOOKEEPER}')
+    print(f'NODE_NAME = {NODE_NAME}')
+    print(f'ROOT_NODE = {ROOT_NODE}')
+    print(f'N_NODES = {N_NODES}')
+    print(f'API_PORT = {API_PORT}')
+    print(f'STARTUP_DELAY = {STARTUP_DELAY}', flush=True)

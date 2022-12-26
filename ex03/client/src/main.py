@@ -32,8 +32,8 @@ else:
     async def on_start():
         res = httpx.get(
             f'http://{ROOT_NODE}:{API_PORT}/nodes/parent/{NODE_NAME}')
-        __logger.info(f'Received response from root node: {res.json()}')
         if res.status_code != 200:
+            __logger.info(res.status_code)
             __logger.critical(f'Could not register node {NODE_NAME}')
             exit(1)
 
@@ -45,8 +45,8 @@ else:
         __logger.info(f'Node {NODE_NAME} successfully registered. The node is ready to use.')
 
 # Disable uvicorn logging as it is not revelant for our application
-logging.getLogger('uvicorn.error').disabled = True
-logging.getLogger('uvicorn.access').disabled = True
+# logging.getLogger('uvicorn.error').disabled = True
+# logging.getLogger('uvicorn.access').disabled = True
 
 # Start the uvicorn server
-uvicorn.run(app, host=NODE_NAME, port=API_PORT, log_level='critical')
+uvicorn.run(app, host=NODE_NAME, port=API_PORT)

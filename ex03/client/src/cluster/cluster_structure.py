@@ -1,8 +1,12 @@
+import logging_factory
+
 from typing import List, Optional
 from env import ROOT_NODE, N_NODES
 
 __binary_tree = [ROOT_NODE] + [None] * (N_NODES - 1)
 __next_idx = 1
+
+__logger = logging_factory.create_logger('cluster_structure')
 
 
 def __add_node(node_name: str):
@@ -52,8 +56,7 @@ def find_absolute_parent_path(node_name: str) -> str:
 
     # Get parent
     parent_node_id = __get_parent_node_idx(node_idx)
-    parent = __binary_tree[parent_node_id]
-    path = [parent_node_id]
+    path = [__binary_tree[parent_node_id]]
 
     # Loop until we get to the root node
     while parent_node_id != 0:
@@ -64,6 +67,7 @@ def find_absolute_parent_path(node_name: str) -> str:
     # Add '' to make the string start with /
     path.append('')
     # join items with / and return in reverse order
+    __logger.debug(f'Path: {path}')
     return '/'.join(path[::-1])
 
 
