@@ -1,8 +1,8 @@
 # Configure Vagrant to be usable with Docker
 VAGRANTFILE_API_VERSION = "2"
 ENV['VAGRANT_DEFAULT_PROVIDER'] = 'docker'
-ENV['FORWARD_DOCKER_PORTS'] = true
-ENV['VAGRANT_NO_PARALLEL'] = false
+ENV['FORWARD_DOCKER_PORTS'] = '1'
+ENV['VAGRANT_NO_PARALLEL'] = '0'
 ENV['VAGRANT_EXPERIMENTAL'] = 'typed_triggers'
 unless Vagrant.has_plugin?("vagrant-docker-compose")
     system("vagrant plugin install vagrant-docker-compose")
@@ -11,12 +11,12 @@ unless Vagrant.has_plugin?("vagrant-docker-compose")
   end
 
 # Docker images
-ZOONODE_IMAGE = 'zoonode:1.0'
-CLIENT_IMAGE = 'client:1.0'
+ZOONODE_IMAGE = 'ex03/zoonode:1.0'
+CLIENT_IMAGE = 'ex03/client:1.0'
 ZOONAVIGATOR_IMAGE = 'elkozmon/zoonavigator:latest'
 
 # Localhost config
-SUBNET = '10.0.1'
+SUBNET = '10.0.1.'
 
 # Node definitions
 NODE = {
@@ -35,8 +35,6 @@ ROOT_NODE_ID = 1 # ID of the root node - this is always indexed from 1
 ROOT_NODE = "#{NODE[:nameprefix]}#{ROOT_NODE_ID}"
 STARTUP_DELAY_SECS = 3
 # --------------------------------------------------------------------
-
-NODE[:api_port] = API_PORT
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     config.ssh.insert_key = false
@@ -58,6 +56,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
 
     ZOOKEEPER_IP_ADDRESS = "#{SUBNET}#{NODE[:ip_offset] - 1}"
+    puts "Zookeeper IP address: #{ZOOKEEPER_IP_ADDRESS}"
 
     # Dockerize zookeeper
     config.vm.define 'zoonode' do |s|
@@ -91,7 +90,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
                     'zookeeper' => ZOOKEEPER_IP_ADDRESS,
                     'root_node' => ROOT_NODE,
                     'n_nodes' => N_NODES,
-                    'api_port' => api_port,
+                    'api_port' => API_PORT,
                     'startup_delay' => ROOT_NODE == node_name ? 0 : STARTUP_DELAY_SECS  # seconds
                 }
             end

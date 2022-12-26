@@ -1,4 +1,4 @@
-import cluster_structure
+import cluster.cluster_structure as cluster_structure
 
 from fastapi import APIRouter
 

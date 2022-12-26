@@ -1,7 +1,7 @@
 # This simple module represents a datastore
 # For simplicity store is a dictionary
 
-import parent_connector
+import store.parent_connector as parent_connector
 import logging_factory
 
 from fastapi import APIRouter

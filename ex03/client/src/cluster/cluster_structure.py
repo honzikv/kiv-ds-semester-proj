@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from env import ROOT_NODE, N_NODES
 
 __binary_tree = [ROOT_NODE] + [None] * (N_NODES - 1)
@@ -67,7 +67,7 @@ def find_absolute_parent_path(node_name: str) -> str:
     return '/'.join(path[::-1])
 
 
-def get_structure() -> List[str | None]:
+def get_structure() -> List[Optional[str]]:
     """
     Returns shallow copy of the current tree
 

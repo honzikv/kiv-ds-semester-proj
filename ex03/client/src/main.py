@@ -32,6 +32,7 @@ else:
     async def on_start():
         res = httpx.get(
             f'http://{ROOT_NODE}:{API_PORT}/nodes/parent/{NODE_NAME}')
+        __logger.info(f'Received response from root node: {res.json()}')
         if res.status_code != 200:
             __logger.critical(f'Could not register node {NODE_NAME}')
             exit(1)
@@ -40,6 +41,8 @@ else:
         # in the Zookeeper
         parent_path = res.json()['path']
         zookeeper_connector.register_node(parent_path)
+        
+        __logger.info(f'Node {NODE_NAME} successfully registered. The node is ready to use.')
 
 # Disable uvicorn logging as it is not revelant for our application
 logging.getLogger('uvicorn.error').disabled = True
