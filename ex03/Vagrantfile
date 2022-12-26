@@ -1,7 +1,3 @@
-require 'json'
-
-
-
 # Configure Vagrant to be usable with Docker
 VAGRANTFILE_API_VERSION = "2"
 ENV['VAGRANT_DEFAULT_PROVIDER'] = 'docker'
@@ -23,92 +19,84 @@ ZOONAVIGATOR_IMAGE = 'elkozmon/zoonavigator:latest'
 SUBNET = '10.0.1'
 
 # Node definitions
-CLIENT = {
-    :nameprefix => 'client-',
+NODE = {
+    :nameprefix => 'NODE-',
     :subnet => SUBNET,
     :ip_offset => 66,
     :image => CLIENT_IMAGE,
 }
 
+# Configurable parameters
+# --------------------------------------------------------------------
+TREE_DEPTH = 3  # Binary tree depth
+N_NODES = 2 ** TREE_DEPTH - 1 # Number of nodes in the tree
+API_PORT = 5000 # Port where the API is exposed
+ROOT_NODE_ID = 1 # ID of the root node - this is always indexed from 1
+ROOT_NODE = "#{NODE[:nameprefix]}#{ROOT_NODE_ID}"
+STARTUP_DELAY_SECS = 3
+# --------------------------------------------------------------------
+
+NODE[:api_port] = API_PORT
+
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+    config.ssh.insert_key = false
 
-    # Build the zoo node images
+    # Build docker images
     config.trigger.before :up, type: :command do |trigger|
-        trigger.name = "Build docker images and configuration files"
+        trigger.name = 'Build docker images and configuration files'
         trigger.ruby do |env, machine|
-            # --- start of Ruby script ---
-            # Build Zoonode list:
-            puts "Building Zoonode configuration."
-            zoo_ensemble = []
-            zoo_hosts = []
-            (1..ZOONODES_COUNT).each do |i|
-                zoo_ensemble << "server.#{i}=#{ZOONODE[:subnet]}#{ZOONODE[:ip_offset] + i}:2888:3888;2181"
-                zoo_hosts << "#{ZOONODE[:subnet]}#{ZOONODE[:ip_offset] + i}:2181"
-                # create volumes for persistent data '/opt/zk/data' if the don't exists
-                `docker volume inspect zoonode_data_#{i} || docker volume create zoonode_data_#{i}`
-            end
-            zoo_servers = zoo_ensemble.join(" ")
-            zoo_client_hosts = zoo_hosts.join(",")
-            # Build Zoonode image:
-            puts "Building Zoonode image:"
-            `docker build zoonode -t "#{ZOONODE_IMAGE}"`
-            # Build client node image:
-            puts "Building client node image:"
-            `docker build client -t "#{CLIENT_IMAGE}"`
-            # --- end of Ruby script ---
+            puts 'Building docker images...'
+
+            # Build node image
+            `docker build zoonode -t #{ZOONODE_IMAGE}`
+
+            # Build client image
+            `docker build client -t #{CLIENT_IMAGE}`
+
+            puts 'Building docker images... Done'
         end
-  end
-
-  # Definition of N Zoonodes
-  (1..ZOONODES_COUNT).each do |i|
-    node_ip_addr = "#{ZOONODE[:subnet]}#{ZOONODE[:ip_offset] + i}"
-    node_name = "#{ZOONODE[:nameprefix]}#{i}"
-    # Definition of Zoonode
-    config.vm.define node_name do |s|
-      s.vm.network "private_network", ip: node_ip_addr
-      s.vm.hostname = node_name 
-      s.vm.provider "docker" do |d|
-        d.image = ZOONODE[:image]
-        d.name = node_name
-        d.has_ssh = true
-        d.env = { "ZOO_MY_ID" => i, "ZOO_SERVERS" => "#{zoo_servers}" }
-        d.create_args = [ "--volume=zoonode_data_#{i}:/opt/zk/data" ]
-      end
-      s.vm.post_up_message = "Node #{node_name} up and running. You can access the node with 'vagrant ssh #{node_name}'}"
     end
-  end
 
-  # Definition of N client nodes
-  (1..CLIENTS_COUNT).each do |i|
-    node_ip_addr = "#{CLIENT[:subnet]}#{CLIENT[:ip_offset] + i}"
-    node_name = "#{CLIENT[:nameprefix]}#{i}"
-    # Definition of client node
-    config.vm.define node_name do |s|
-      s.vm.network "private_network", ip: node_ip_addr
-      s.vm.hostname = node_name
-      s.vm.provider "docker" do |d|
-        d.image = CLIENT[:image]
-        d.name = node_name
-        d.has_ssh = true
-        d.env = { "ZOO_SERVERS" => "#{zoo_client_hosts}" }
-      end
-      s.vm.post_up_message = "Node #{node_name} up and running. You can access the node with 'vagrant ssh #{node_name}'}"
-    end
-  end
+    ZOOKEEPER_IP_ADDRESS = "#{SUBNET}#{NODE[:ip_offset] - 1}"
 
-    # Definition of Zoonavigator
-    config.vm.define "zoonavigator" do |s|
-      s.vm.network "private_network", ip: "#{SUBNET}250"
-      s.vm.network "forwarded_port", guest: 9000, host: 9000, host_ip: "0.0.0.0"
-      s.vm.hostname = "zoonavigator"
-      s.vm.provider "docker" do |d|
-        d.image = ZOONAVIGATOR_IMAGE
-        d.name = "zoonavigator"
-        d.has_ssh = false
-        d.env = { "HTTP_PORT" => "9000" }
-      end
-      s.vm.post_up_message = "Node 'zoonavigator' up and running. You can access the node with 'vagrant ssh zoonode'}"
+    # Dockerize zookeeper
+    config.vm.define 'zoonode' do |s|
+        s.vm.network 'private_network', ip: ZOOKEEPER_IP_ADDRESS
+        s.vm.hostname = 'zoonode'
+        s.vm.provider 'docker' do |d|
+            d.image = ZOONODE_IMAGE
+            d.has_ssh = true
+            d.name = 'Zoonode'
+        end
+        s.vm.post_up_message = 'Zoonode is up and running. Access it via: vagrant ssh zoonode'
     end
-  
+
+    # Dockerize clients
+    
+    (1..N_NODES).each do |i|
+        # Configure ip address and name
+        node_ip_address = "#{SUBNET}#{NODE[:ip_offset] + i}"
+        node_name = "#{NODE[:nameprefix]}#{i}"
+
+        config.vm.define node_name do |s|
+            s.vm.network 'private_network', ip: node_ip_address
+            s.vm.hostname = node_name
+            s.vm.network 'forwarded_port', guest: 80, host: API_PORT, host_ip: '0.0.0.0', auto_correct: true
+            s.vm.provider 'docker' do |d|
+                d.image = CLIENT_IMAGE
+                d.has_ssh = true
+                d.name = node_name
+                d.env = {
+                    'node_name' => node_name,
+                    'zookeeper' => ZOOKEEPER_IP_ADDRESS,
+                    'root_node' => ROOT_NODE,
+                    'n_nodes' => N_NODES,
+                    'api_port' => api_port,
+                    'startup_delay' => ROOT_NODE == node_name ? 0 : STARTUP_DELAY_SECS  # seconds
+                }
+            end
+            s.vm.post_up_message = "#{node_name} is up and running. Access it via: vagrant ssh #{node_name}"
+        end
+    end
 end
 
