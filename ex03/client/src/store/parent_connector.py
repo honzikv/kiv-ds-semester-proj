@@ -39,7 +39,7 @@ def get_key_from_parent(key: str):
     if __parent_node is None:
         return {'item': None}
 
-    res = httpx.get(f'http://{__parent_node}/{key}')
+    res = httpx.get(f'http://{__parent_node}/store/{key}')
     if res.status_code == 200:
         return res.json()
     elif res.status_code == 404:
@@ -63,7 +63,7 @@ async def put_key_in_parent(key: str, value: Any, wait_for_response: bool = Fals
         return {'success': True}
 
     if wait_for_response:
-        res = httpx.put(f'http://{__parent_node}/{key}',
+        res = httpx.put(f'http://{__parent_node}/store/{key}',
                         json={'key': key, 'value': value, '_wait_for_parent': False})
         if res.status_code == 200:
             return {'success': True}
@@ -72,7 +72,7 @@ async def put_key_in_parent(key: str, value: Any, wait_for_response: bool = Fals
     # Otherwise just send the request and return
     async def put_async():
         async with httpx.AsyncClient() as client:
-            res = await client.put(f'http://{__parent_node}/{key}', json={'key': key, 'value': value, '_wait_for_parent': False})
+            res = await client.put(f'http://{__parent_node}/store/{key}', json={'key': key, 'value': value, '_wait_for_parent': False})
             if res.status_code != 200:
                 __logger.error(
                     f'Could not put key {key} in parent node {__parent_node}')
@@ -94,14 +94,14 @@ async def delete_key_in_parent(key: str, wait_for_response: bool = False):
 
     if wait_for_response:
         res = httpx.delete(
-            f'http://{__parent_node}/{key}?wait_for_parent=false')
+            f'http://{__parent_node}/store/{key}?wait_for_parent=false')
         if res.status_code == 200:
             return {'success': True}
         return {'success': False}
 
     async def delete_async():
         async with httpx.AsyncClient() as client:
-            res = await client.delete(f'http://{__parent_node}/{key}?wait_for_parent=false')
+            res = await client.delete(f'http://{__parent_node}/store/{key}?wait_for_parent=false')
             if res.status_code != 200:
                 __logger.error(
                     f'Could not delete key {key} from parent node {__parent_node}')

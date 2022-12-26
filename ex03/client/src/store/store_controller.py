@@ -25,7 +25,7 @@ class PutKeyRequest(BaseModel):
     _wait_for_parent: bool = True
 
 
-@store_router.get('/{key}')
+@store_router.get('/store/{key}')
 def get_item(key: str):
     """
     Returns the value of the key from the store. If the key is not present in the store,
@@ -54,7 +54,7 @@ def get_item(key: str):
     return {'success': value is not None, 'value': value}, 200 if value is not None else 404
 
 
-@store_router.put('/{key}')
+@store_router.put('/store/{key}')
 async def put_item(key: str, put_key_req: PutKeyRequest):
     """
     Puts key in the store. This is propagated to the parent node recursively.
@@ -82,7 +82,7 @@ async def put_item(key: str, put_key_req: PutKeyRequest):
     return {'success': True, 'key': key, 'value': req.value}
 
 
-@store_router.delete('/{key}')
+@store_router.delete('/store/{key}')
 async def delete_item(key: str, wait_for_parent: bool = True):
     """
     Deletes key from the store. This is propagated to the parent node recursively.
@@ -108,7 +108,7 @@ async def delete_item(key: str, wait_for_parent: bool = True):
     return {'success': True, 'key': key}
 
 
-@store_router.get('/')
+@store_router.get('/store')
 def get_all_items():
     """
     Returns all items in the store as json
