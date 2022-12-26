@@ -3,6 +3,8 @@ import logging_factory
 
 from fastapi import APIRouter
 from store_models import PutKeyRequest
+from typing import Any
+from pydantic import BaseModel
 
 # Simple module that represents a data store
 
@@ -13,6 +15,10 @@ __logger = logging_factory.create_logger('store')
 # Router to define api endpoints
 store_router = APIRouter()
 
+class PutKeyRequest(BaseModel):
+    key: str
+    value: Any
+    _wait_for_parent: bool = True
 
 @store_router.get('/{key}')
 def get_item(key: str):

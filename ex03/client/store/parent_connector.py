@@ -6,7 +6,6 @@ import asyncio
 
 from typing import Any
 from env import ROOT_NODE, NODE_NAME
-from store_models import PutKeyRequest
 
 # Name of the parent node, None if this node is root
 __parent_node = None
