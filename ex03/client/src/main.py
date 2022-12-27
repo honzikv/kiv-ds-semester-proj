@@ -5,6 +5,7 @@ import logging
 import logging_factory
 import uvicorn
 import cluster.zookeeper_connector as zookeeper_connector
+import store.parent_service as parent_service
 
 from env import NODE_NAME, ROOT_NODE, API_PORT, STARTUP_DELAY
 from cluster.cluster_controller import cluster_router
@@ -41,6 +42,9 @@ else:
         # in the Zookeeper
         parent_path = res.json()['path']
         zookeeper_connector.register_node(parent_path)
+        
+        # And set the parent in the parent service
+        parent_service.set_parent(parent_path)
         
         __logger.info(f'Node {NODE_NAME} successfully registered. The node is ready to use.')
 

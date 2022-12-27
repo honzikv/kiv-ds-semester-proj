@@ -54,7 +54,7 @@ def find_absolute_parent_path(node_name: str) -> str:
         node_idx = __next_idx
         __add_node(node_name)
 
-    # Get parent
+    # Get the parent
     parent_node_id = __get_parent_node_idx(node_idx)
     path = [__binary_tree[parent_node_id]]
 

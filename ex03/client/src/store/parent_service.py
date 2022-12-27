@@ -12,9 +12,9 @@ __parent_node = None
 __logger = logging_factory.create_logger('parent_connector')
 
 
-def initialize_cluster_connector(parent_path: str):
+def set_parent(parent_path: str):
     """
-    Initializes the cluster connector module.
+    Initializes the service.
 
     Args:
         parent_path (str): parent path
@@ -37,13 +37,13 @@ def get_key_from_parent(key: str):
     """
 
     if __parent_node is None:
-        return {'item': None}
+        return {'value': None}
 
     res = httpx.get(f'http://{__parent_node}/store/{key}')
     if res.status_code == 200:
         return res.json()
     elif res.status_code == 404:
-        return {'item': None}
+        return {'value': None}
 
     raise Exception(
         f'Could not get key {key} from parent node {__parent_node}')
@@ -67,7 +67,9 @@ async def put_key_in_parent(key: str, value: Any, wait_for_response: bool = Fals
                         json={'key': key, 'value': value, '_wait_for_parent': False})
         if res.status_code == 200:
             return {'success': True}
-        return {'success': False}
+        
+        raise Exception(
+            f'Could not put key {key} in the parent node {__parent_node}')
 
     # Otherwise just send the request and return
     async def put_async():
@@ -97,14 +99,11 @@ async def delete_key_in_parent(key: str, wait_for_response: bool = False):
             f'http://{__parent_node}/store/{key}?wait_for_parent=false')
         if res.status_code == 200:
             return {'success': True}
-        return {'success': False}
+        raise Exception('Could not delete key from parent node due to error')
 
     async def delete_async():
         async with httpx.AsyncClient() as client:
-            res = await client.delete(f'http://{__parent_node}/store/{key}?wait_for_parent=false')
-            if res.status_code != 200:
-                __logger.error(
-                    f'Could not delete key {key} from parent node {__parent_node}')
+            _ = await client.delete(f'http://{__parent_node}/store/{key}?wait_for_parent=false')                
 
     asyncio.create_task(delete_async())
     return {'success': True}

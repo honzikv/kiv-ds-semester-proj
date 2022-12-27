@@ -1,7 +1,7 @@
 # This simple module represents a datastore
 # For simplicity store is a dictionary
 
-import store.parent_connector as parent_connector
+import store.parent_service as parent_service
 import logging_factory
 
 from fastapi import APIRouter
@@ -37,14 +37,17 @@ def get_item(key: str):
     Returns:
         json: with "success" and "value" fields
     """
+    
     if key in __store:
+        __logger.debug(f'Found key {key} in the local store, returning it...')
         return {'value': __store[key]}
 
     # Otherwise try to contact the top node
     try:
-        res = parent_connector.get_key_from_parent(key)
+        res = parent_service.get_key_from_parent(key)
     except Exception as e:
-        __logger.critical(f'Failed to get key {key} from parent node: {e}')
+        __logger.critical(f'Failed to get key {key} from parent node: {e} due to communication issues')
+        return {'success': False, 'error': 'Failed to get key from parent node due to communication issues'}, 503
 
     # Update the key in the store
     value = res['value']
@@ -74,10 +77,13 @@ async def put_item(key: str, put_key_req: PutKeyRequest):
     # Update it in the parent node
     req = PutKeyRequest(key=key, value=put_key_req.value,
                         _wait_for_parent=False)
-    res = parent_connector.put_key_in_parent(
-        key, req, wait_for_response=put_key_req._wait_for_parent)
-    if not res['success']:
-        return {'success': False, 'error': 'Failed to update parent node', 'key': key, 'value': req.value}
+    
+    try:
+        _ = parent_service.put_key_in_parent(
+            key, req, wait_for_response=put_key_req._wait_for_parent)
+    except Exception:
+        __logger.critical(f'Failed to update parent node for key {key} due to communication issues')
+        return {'success': False, 'error': 'Failed to update parent node due to communication issues', 'key': key, 'value': req.value}, 503
 
     return {'success': True, 'key': key, 'value': req.value}
 
@@ -100,10 +106,12 @@ async def delete_item(key: str, wait_for_parent: bool = True):
     __store.pop(key, None)
 
     # Delete it in the parent node
-    res = parent_connector.delete_key_in_parent(
-        key, wait_for_parent=wait_for_parent)
-    if not res['success']:
-        return {'success': False, 'error': 'Failed to delete from parent node', 'key': key}
+    try:
+        _ = parent_service.delete_key_in_parent(
+            key, wait_for_parent=wait_for_parent)
+    except Exception:
+        __logger.critical(f'Failed to delete key {key} from parent node due to communication issues')
+        return {'success': False, 'error': 'Failed to delete key from parent node due to communication issues'}, 503
 
     return {'success': True, 'key': key}
 
