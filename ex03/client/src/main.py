@@ -7,7 +7,7 @@ import uvicorn
 import cluster.zookeeper_connector as zookeeper_connector
 import store.parent_service as parent_service
 
-from env import NODE_NAME, ROOT_NODE, API_PORT, STARTUP_DELAY
+from env import NODE_NAME, ROOT_NODE, API_PORT, STARTUP_DELAY, NODE_ADDRESS
 from cluster.cluster_controller import cluster_router
 from store.store_controller import store_router
 
@@ -16,6 +16,10 @@ __logger = logging_factory.create_logger('main')
 # Create fastapi app
 app = fastapi.FastAPI()
 app.include_router(store_router)
+
+@app.get('/')
+def health():
+    return {'status': 'alive'}
 
 # Add corresponding components
 if NODE_NAME == ROOT_NODE:
@@ -53,4 +57,4 @@ else:
 # logging.getLogger('uvicorn.access').disabled = True
 
 # Start the uvicorn server
-uvicorn.run(app, host=NODE_NAME, port=API_PORT)
+uvicorn.run(app, host='0.0.0.0', port=API_PORT)

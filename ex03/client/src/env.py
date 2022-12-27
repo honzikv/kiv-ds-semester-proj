@@ -5,6 +5,7 @@ import os
 
 ZOOKEEPER = os.environ['zookeeper']
 NODE_NAME = os.environ['node_name']
+NODE_ADDRESS = os.environ['node_address']
 ROOT_NODE = os.environ['root_node']
 N_NODES = int(os.environ['n_nodes'])
 API_PORT = int(os.environ['api_port'])
