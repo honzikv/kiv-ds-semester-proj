@@ -1,7 +1,7 @@
 # This simple module represents a datastore
 # For simplicity store is a dictionary
 
-import store.parent_service as parent_service
+import store.store_service as store_service
 import logging_factory
 
 from fastapi import APIRouter
@@ -44,9 +44,9 @@ def get_item(key: str):
 
     # Otherwise try to contact the top node
     try:
-        res = parent_service.get_key_from_parent(key)
+        res = store_service.get_key_from_parent(key)
     except Exception as e:
-        __logger.critical(f'Failed to get key {key} from parent node: {e} due to communication issues')
+        __logger.error(f'Failed to get key {key} from parent node: {e} due to communication issues')
         return {'success': False, 'error': 'Failed to get key from parent node due to communication issues'}, 503
 
     # Update the key in the store
@@ -79,10 +79,10 @@ async def put_item(key: str, put_key_req: PutKeyRequest):
                         _wait_for_parent=False)
     
     try:
-        _ = parent_service.put_key_in_parent(
+        _ = store_service.put_key_in_parent(
             key, req, wait_for_response=put_key_req._wait_for_parent)
     except Exception:
-        __logger.critical(f'Failed to update parent node for key {key} due to communication issues')
+        __logger.error(f'Failed to update parent node for key {key} due to communication issues')
         return {'success': False, 'error': 'Failed to update parent node due to communication issues', 'key': key, 'value': req.value}, 503
 
     return {'success': True, 'key': key, 'value': req.value}
@@ -107,10 +107,10 @@ async def delete_item(key: str, wait_for_parent: bool = True):
 
     # Delete it in the parent node
     try:
-        _ = parent_service.delete_key_in_parent(
+        _ = store_service.delete_key_in_parent(
             key, wait_for_parent=wait_for_parent)
     except Exception:
-        __logger.critical(f'Failed to delete key {key} from parent node due to communication issues')
+        __logger.error(f'Failed to delete key {key} from parent node due to communication issues')
         return {'success': False, 'error': 'Failed to delete key from parent node due to communication issues'}, 503
 
     return {'success': True, 'key': key}

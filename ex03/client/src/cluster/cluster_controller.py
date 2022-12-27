@@ -13,4 +13,4 @@ def find_absolute_parent_path(node_name: str):
 
 @cluster_router.get('/nodes/structure')
 def get_tree():
-    return {'structure': cluster_structure.get_structure()}
+    return {'binary_tree_array': cluster_structure.get_structure()}

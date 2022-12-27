@@ -3,6 +3,7 @@
 import logging_factory
 import httpx
 import asyncio
+import background_tasks
 
 from typing import Any
 from env import ROOT_NODE, NODE_NAME
@@ -26,6 +27,7 @@ def set_parent(parent_path: str):
         return
 
     __parent_node = parent_path.split('/')[-1]
+    __logger.debug(f'Parent node set to {__parent_node}')
 
 
 def get_key_from_parent(key: str):
@@ -49,7 +51,7 @@ def get_key_from_parent(key: str):
         f'Could not get key {key} from parent node {__parent_node}')
 
 
-async def put_key_in_parent(key: str, value: Any, wait_for_response: bool = False):
+def put_key_in_parent(key: str, value: Any, wait_for_response: bool = False):
     """
     Puts key in the parent node.
 
@@ -66,20 +68,23 @@ async def put_key_in_parent(key: str, value: Any, wait_for_response: bool = Fals
         res = httpx.put(f'http://{__parent_node}/store/{key}',
                         json={'key': key, 'value': value, '_wait_for_parent': False})
         if res.status_code == 200:
+            __logger.debug(f'Put key {key} in parent node {__parent_node}')
             return {'success': True}
         
         raise Exception(
             f'Could not put key {key} in the parent node {__parent_node}')
 
     # Otherwise just send the request and return
-    async def put_async():
-        async with httpx.AsyncClient() as client:
-            res = await client.put(f'http://{__parent_node}/store/{key}', json={'key': key, 'value': value, '_wait_for_parent': False})
-            if res.status_code != 200:
-                __logger.error(
-                    f'Could not put key {key} in parent node {__parent_node}')
-
-    asyncio.create_task(put_async())
+    def put_in_background():
+        res = httpx.put(f'http://{__parent_node}/store/{key}',
+                        json={'key': key, 'value': value, '_wait_for_parent': False})
+        if res.status_code == 200:
+            __logger.debug(f'Async put key {key} in parent node {__parent_node}')
+            return {'success': True}
+            
+        __logger.debug(f'Async put key {key} in parent node {__parent_node} failed')
+        
+    background_tasks.add_task(put_in_background)
     return {'success': True}
 
 
@@ -100,10 +105,14 @@ async def delete_key_in_parent(key: str, wait_for_response: bool = False):
         if res.status_code == 200:
             return {'success': True}
         raise Exception('Could not delete key from parent node due to error')
-
-    async def delete_async():
-        async with httpx.AsyncClient() as client:
-            _ = await client.delete(f'http://{__parent_node}/store/{key}?wait_for_parent=false')                
-
-    asyncio.create_task(delete_async())
+    
+    # Otherwise do it in the background
+    async def delete_in_background():
+        res = httpx.delete(
+            f'http://{__parent_node}/store/{key}?wait_for_parent=false')
+        __logger.debug(f'Async delete key {key} in parent node {__parent_node}')
+        if res.status_code != 200:
+            __logger.debug(f'Async delete key {key} in parent node {__parent_node} failed')
+            
+    background_tasks.add_task(delete_in_background)
     return {'success': True}

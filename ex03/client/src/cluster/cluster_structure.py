@@ -67,7 +67,6 @@ def find_absolute_parent_path(node_name: str) -> str:
     # Add '' to make the string start with /
     path.append('')
     # join items with / and return in reverse order
-    __logger.debug(f'Path: {path}')
     return '/'.join(path[::-1])
 
 
@@ -79,3 +78,4 @@ def get_structure() -> List[Optional[str]]:
         List[str]: shallow copy of the current tree
     """
     return __binary_tree.copy()
+

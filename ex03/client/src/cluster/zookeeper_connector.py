@@ -62,3 +62,9 @@ def register_node(parent_path: str = None):
         # This only executes if the for loop is not broken
         __logger.critical('Could not register node. Exiting...')
         exit(1)
+
+def get_paths():
+    """
+    Returns all registered paths in the cluster.
+    """
+    # TODO get them paths

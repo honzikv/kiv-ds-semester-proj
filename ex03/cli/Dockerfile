@@ -15,4 +15,3 @@ RUN pip3.9 install httpx
 RUN pip3.9 install kazoo
 WORKDIR /
 COPY src /opt
-CMD python3.9 /opt/main.py
