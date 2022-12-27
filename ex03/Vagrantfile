@@ -32,7 +32,7 @@ N_NODES = 2 ** TREE_DEPTH - 1 # Number of nodes in the tree
 API_PORT = 5000 # Port where the API is exposed
 ROOT_NODE_ID = 1 # ID of the root node - this is always indexed from 1
 ROOT_NODE = "#{NODE[:nameprefix]}#{ROOT_NODE_ID}"
-STARTUP_DELAY_SECS = 3
+STARTUP_DELAY_SECS = 5
 # --------------------------------------------------------------------
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
@@ -70,10 +70,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
 
     # Dockerize clients
-    
     (1..N_NODES).each do |i|
         # Configure ip address and name
         node_ip_address = "#{SUBNET}#{NODE[:ip_offset] + i}"
+        puts "Node #{i} IP address: #{node_ip_address}"
         node_name = "#{NODE[:nameprefix]}#{i}"
 
         config.vm.define node_name do |s|
@@ -91,7 +91,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
                     'n_nodes' => N_NODES,
                     'api_port' => API_PORT,
                     'startup_delay' => ROOT_NODE == node_name ? 0 : STARTUP_DELAY_SECS,  # seconds
-                    'debug' => 'true'
+                    'debug' => true
                 }
             end
             s.vm.post_up_message = "#{node_name} is up and running. Access it via: vagrant ssh #{node_name}"
