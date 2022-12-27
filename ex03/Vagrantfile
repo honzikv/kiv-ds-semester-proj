@@ -16,6 +16,7 @@ end
 # Docker images
 ZOONODE_IMAGE = 'ex03/zoonode:1.0'
 CLIENT_IMAGE = 'ex03/client:1.0'  # in this case client == node
+CLI_IMAGE = 'ex03/cli:1.0'
 
 # Configuration for localhost
 SUBNET = '10.0.1.'
@@ -69,6 +70,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         s.vm.post_up_message = 'Zoonode is up and running. Access it with: vagrant ssh zoonode'
     end
 
+    API_PORTS = (1..N_NODES).map { |i| API_PORT + i }
     # Nodes
     (1..N_NODES).each do |i|
         node_ip_address = "#{SUBNET}#{NODE[:ip_offset] + i}"
@@ -77,7 +79,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
         config.vm.define node_name do |s|
             s.vm.network 'private_network', ip: node_ip_address
-            s.vm.network 'forwarded_port', guest: API_PORT, host: API_PORT, host_ip: '0.0.0.0', auto_correct: true
+            s.vm.network 'forwarded_port', guest: API_PORT, host: API_PORTS[i-1], host_ip: '0.0.0.0', auto_correct: true
             s.vm.hostname = node_name
             s.vm.provider 'docker' do |d|
                 d.image = NODE[:image]

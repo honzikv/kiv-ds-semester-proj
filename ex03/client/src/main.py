@@ -19,7 +19,7 @@ app.include_router(store_router)
 
 @app.get('/')
 def health():
-    return {'status': 'alive'}
+    return {'status': 'alive', 'node': NODE_NAME, 'address': NODE_ADDRESS}
 
 # Add corresponding components
 if NODE_NAME == ROOT_NODE:
