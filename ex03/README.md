@@ -71,6 +71,6 @@ The API is documented using OpenAPI which is exposed on the
 
 ## CLI application
 
-Additionally, the application contains a CLI application that can be 
+Additionally, the project contains a CLI application that can be 
 used to communicate with the nodes. This application can be run
 in docker container or on the host machine.
