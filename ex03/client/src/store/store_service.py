@@ -55,7 +55,7 @@ def get_key_from_parent(key: str):
     if __parent_node is None:
         return {'value': None}
 
-    url = __build_url('store/{key}')
+    url = __build_url(f'store/{key}')
     __logger.debug(f'Sending GET request to {url}')
     res = httpx.get(url)
 
@@ -78,7 +78,7 @@ def put_in_background(url, key, value):
         value (Any): _description_
     """
     res = httpx.put(
-        url, json={'value': value, '_wait_for_parent': False})
+        url, json={'value': value, 'wait_for_parent': False})
     if res.status_code == 200:
         __logger.debug(
             f'Async put key {key} in parent node {__parent_node}')
@@ -108,7 +108,7 @@ def put_key_in_parent(key: str, value: Any, wait_for_response: bool = False):
         f'Sending PUT request to {url}, wait_for_response={wait_for_response}')
     if wait_for_response:
         res = httpx.put(
-            url, json={'value': value, '_wait_for_parent': False})
+            url, json={'value': value, 'wait_for_parent': False})
 
         if res.status_code == 200:
             __logger.debug(f'Put key "{key}" in parent node {__parent_node}')

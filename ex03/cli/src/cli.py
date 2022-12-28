@@ -39,6 +39,7 @@ def build_node_url(node_str: str):
     node_url = create_node_url(node_id)
     return node_url
 
+
 def put(node: str, key: str, value: Union[str, int, float, bool]):
     """
     Sets key in the specified node to the given value.

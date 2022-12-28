@@ -1,5 +1,0 @@
-PUT http://localhost:5004/store/hi HTTP 1.1
-
-{
-  "value": "guys"
-}

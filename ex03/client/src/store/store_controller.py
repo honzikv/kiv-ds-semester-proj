@@ -22,7 +22,7 @@ class PutKeyRequest(BaseModel):
     JSON model for put key request.
     """
     value: Any
-    _wait_for_parent: bool = True
+    wait_for_parent: bool = True
 
 
 @store_router.get('/store/{key}')
@@ -76,20 +76,16 @@ def put_item(key: str, put_key_req: PutKeyRequest):
     
     # Update the value locally
     __store[key] = put_key_req.value
-
-    # Update it in the parent node
-    req = PutKeyRequest(key=key, value=put_key_req.value,
-                        _wait_for_parent=False)
     
     try:
         _ = store_service.put_key_in_parent(
-            key, req, wait_for_response=put_key_req._wait_for_parent)
+            key, put_key_req.value, wait_for_response=put_key_req.wait_for_parent)
     except Exception as e:
         err = f'Failed to update key {key} in parent node due to communication issues'
         __logger.error(err)
         raise HTTPException(status_code=503, detail=err)
 
-    return {'key': key, 'value': req.value}
+    return {'key': key, 'value': put_key_req.value}
 
 
 @store_router.delete('/store/{key}')
