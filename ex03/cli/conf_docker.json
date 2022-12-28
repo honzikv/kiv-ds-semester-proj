@@ -1,0 +1,6 @@
+{
+    "mode": "guest",
+    "node_url_prefix": "http://NODE-",
+    "port_start": 5000,
+    "node_prefix": "NODE-"
+}

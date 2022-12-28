@@ -13,3 +13,4 @@ RUN pip3.9 install httpx
 RUN pip3.9 install fire
 WORKDIR /
 COPY cli.py /opt
+COPY conf_docker.json /opt/conf.json

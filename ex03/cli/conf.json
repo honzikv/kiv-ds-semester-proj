@@ -1,0 +1,6 @@
+{
+    "mode": "host",
+    "node_url_prefix": "http://localhost:",
+    "port_start": 5000,
+    "node_prefix": "NODE-"
+}

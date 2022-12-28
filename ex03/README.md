@@ -7,13 +7,13 @@ stores. Each cache node is a separate Docker container that uses FastAPI to impl
 Each node exposes said API on port 5000 (in Docker network). The API has several
 endpoints:
 
-`/store` endpoint is used to perform operations on the store itself - GET, PUT, and DELETE
+- `/store` endpoint is used to perform operations on the store itself - GET, PUT, and DELETE
 
-`/nodes` endpoint is used to get information about the nodes in the system (this is only accessible in the root node)
+- `/nodes` endpoint is used to get information about the nodes in the system (this is only accessible in the root node)
 
-`/docs` endpoint is used to get OpenAPI documentation
+- `/docs` endpoint is used to get OpenAPI documentation
 
-`/` endpoint is used to get information about the node itself and serves as a simple health check
+- `/` endpoint is used to get information about the node itself and serves as a simple health check
 
 # The infrastructure
 
@@ -107,5 +107,8 @@ And finally, to delete the key `key1` from node `NODE-1`, we run:
 ```zsh
 python cli.py DELETE NODE-1 key1
 ```
+
+Note that in the dockerized version we need to run python using `python3.9` command instead.
+
 # Cache coherence
 

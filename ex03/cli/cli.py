@@ -3,19 +3,22 @@ import fire
 import httpx
 import os
 import re
+import json
 
-MODE = 'host' if not os.environ.get('docker') else 'guest'
-NODE_URL_PREFIX = 'http://localhost:' if MODE == 'host' else 'http://NODE-'
-PORT_START = 5000
-NODE_PREFIX = 'NODE-'
-NODE_REGEX = f'{NODE_PREFIX}[0-9]+'
+config = json.load(open('conf.json'))
+
+mode = config['mode']
+node_url_prefix = config['node_url_prefix']
+port_start = config['port_start']
+node_prefix = config['node_prefix']
+NODE_REGEX = f'{node_prefix}[0-9]+'
 
 
 def create_node_url(node_id):
-    if MODE == 'host':
-        return f'{NODE_URL_PREFIX}{PORT_START + node_id}'
+    if mode == 'host':
+        return f'{node_url_prefix}{port_start + node_id}'
     
-    return f'{NODE_URL_PREFIX}{node_id}:{PORT_START}'
+    return f'{node_url_prefix}{node_id}:{port_start}'
 
 
 def build_node_url(node_str: str):
@@ -37,7 +40,7 @@ def build_node_url(node_str: str):
         if not re.match(NODE_REGEX, node_str, re.IGNORECASE):
             raise ValueError('Invalid node name')
 
-        node_id = int(node_str[len(NODE_PREFIX):])
+        node_id = int(node_str[len(node_prefix):])
 
     node_url = create_node_url(node_id)
     return node_url

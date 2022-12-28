@@ -27,14 +27,14 @@ NODE = {
     :nameprefix => 'NODE-',
     :subnet => SUBNET,
     :ip_offset => 66,
-    :image => CLIENT_IMAGE,
 }
 
 # Configurable parameters
 # --------------------------------------------------------------------
+DEBUG = true
 TREE_DEPTH = 3  # Binary tree depth (root node is at depth 1)
 N_NODES = 2 ** TREE_DEPTH - 1 # Number of nodes in the binary tree
-ROOT_NODE_ID = 1 # ID of the root node - this is always indexed from 1
+ROOT_NODE_ID = 4 # ID of the root node - this is always indexed from 1
 ROOT_NODE = "#{NODE[:nameprefix]}#{ROOT_NODE_ID}"
 ZOOKEEPER_IP_ADDRESS = "#{SUBNET}#{NODE[:ip_offset]}"
 STARTUP_DELAY_SECS = 1
@@ -51,8 +51,12 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
             `docker build zoonode -t "#{ZOONODE_IMAGE}"`
             
             # Build client node image:
-            puts "Building client node image:"
+            puts 'Building client node image:'
             `docker build client -t "#{CLIENT_IMAGE}"`
+
+            # Build CLI image:
+            puts 'Building CLI image:'
+            `docker build cli -t "#{CLI_IMAGE}"`
         end
     end
 
@@ -70,22 +74,45 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         end
         s.vm.post_up_message = 'Zoonode is up and running. Access it with: vagrant ssh zoonode'
     end
+
+    # Root node
+    config.vm.define ROOT_NODE do |s|
+        node_ip_address = "#{SUBNET}#{NODE[:ip_offset] + ROOT_NODE_ID}"
+        s.vm.network 'private_network', ip: node_ip_address
+        s.vm.network 'forwarded_port', guest: API_PORT, host: API_PORTS[ROOT_NODE_ID-1], host_ip: '0.0.0.0', auto_correct: true
+        s.vm.hostname = ROOT_NODE
+        s.vm.provider 'docker' do |d|
+            d.image = CLIENT_IMAGE
+            d.name = ROOT_NODE
+            d.has_ssh = true
+            d.env = {
+                'node_name' => ROOT_NODE,
+                'node_address' => node_ip_address,
+                'zookeeper' => ZOOKEEPER_IP_ADDRESS,
+                'root_node' => ROOT_NODE,
+                'n_nodes' => N_NODES,
+                'api_port' => API_PORT,
+                'startup_delay' => 0,  # seconds
+                'debug' => DEBUG
+            }
+        end
+        s.vm.post_up_message = 'Root node is up and running. Access it with: vagrant ssh NODE-1'
+    end
    
     # Nodes
     (1..N_NODES).each do |i|
-        # if i == ROOT_NODE_ID
-        #     next
-        # end
+        if i == ROOT_NODE_ID
+            next
+        end
         node_ip_address = "#{SUBNET}#{NODE[:ip_offset] + i}"
         node_name = "#{NODE[:nameprefix]}#{i}"
-        puts "Creating node #{node_name} with IP address #{node_ip_address}"
 
         config.vm.define node_name do |s|
             s.vm.network 'private_network', ip: node_ip_address
             s.vm.network 'forwarded_port', guest: API_PORT, host: API_PORTS[i-1], host_ip: '0.0.0.0', auto_correct: true
             s.vm.hostname = node_name
             s.vm.provider 'docker' do |d|
-                d.image = NODE[:image]
+                d.image = CLIENT_IMAGE
                 d.name = node_name
                 d.has_ssh = true
                 d.env = {
@@ -96,10 +123,25 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
                     'n_nodes' => N_NODES,
                     'api_port' => API_PORT,
                     'startup_delay' => ROOT_NODE == node_name ? 0 : STARTUP_DELAY_SECS,  # seconds
-                    'debug' => true
+                    'debug' => DEBUG
                 }
             end
             s.vm.post_up_message = "Node #{node_name} is up and running. Access it with: vagrant ssh #{node_name}"
         end
+    end
+
+    # CLI
+    config.vm.define 'cli' do |s|
+        s.vm.network 'private_network', ip: "#{SUBNET}#{NODE[:ip_offset] + N_NODES + 1}"
+        s.vm.hostname = 'cli'
+        s.vm.provider 'docker' do |d|
+            d.image = CLI_IMAGE
+            d.name = 'cli'
+            d.has_ssh = true
+            d.env = {
+                'docker' => true,
+            }
+        end
+        s.vm.post_up_message = 'CLI is up and running. Access it with: vagrant ssh cli'
     end
 end
