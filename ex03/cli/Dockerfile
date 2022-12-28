@@ -9,9 +9,7 @@ RUN ./configure --enable-optimizations
 RUN make altinstall
 RUN rm -f /opt/Python-3.9.6.tgz
 RUN pip3.9 install requests
-RUN pip3.9 install fastapi
-RUN pip3.9 install uvicorn
 RUN pip3.9 install httpx
-RUN pip3.9 install kazoo
+RUN pip3.9 install fire
 WORKDIR /
 COPY src /opt
