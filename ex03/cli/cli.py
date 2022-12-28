@@ -5,14 +5,17 @@ import os
 import re
 
 MODE = 'host' if not os.environ.get('docker') else 'guest'
-NODE_URL_PREFIX = 'http://localhost:' if MODE == 'host' else 'http://10.0.1.'
+NODE_URL_PREFIX = 'http://localhost:' if MODE == 'host' else 'http://NODE-'
 PORT_START = 5000
 NODE_PREFIX = 'NODE-'
 NODE_REGEX = f'{NODE_PREFIX}[0-9]+'
 
 
 def create_node_url(node_id):
-    return f'{NODE_URL_PREFIX}{PORT_START + node_id}'
+    if MODE == 'host':
+        return f'{NODE_URL_PREFIX}{PORT_START + node_id}'
+    
+    return f'{NODE_URL_PREFIX}{node_id}:{PORT_START}'
 
 
 def build_node_url(node_str: str):

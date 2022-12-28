@@ -12,4 +12,4 @@ RUN pip3.9 install requests
 RUN pip3.9 install httpx
 RUN pip3.9 install fire
 WORKDIR /
-COPY src /opt
+COPY cli.py /opt
