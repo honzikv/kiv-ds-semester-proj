@@ -143,7 +143,7 @@ def delete_in_background(url, key):
         f'Async delete key "{key}" in parent node {__parent_node} succeeded')
 
 
-def delete_key_in_parent(key: str, wait_for_response: bool = False):
+def delete_key_in_parent(key: str, wait_for_parent: bool = False):
     """
     Deletes key from parent node.
 
@@ -151,16 +151,19 @@ def delete_key_in_parent(key: str, wait_for_response: bool = False):
         key (str): key to be deleted
     """
 
+    __logger.debug(f'Deleting key "{key}" from parent node')
     if __parent_node is None:
+        __logger.debug('There is no parent - this is a root node, skipping delete')
         return {'success': True}
 
     url = __build_url(f'store/{key}?wait_for_parent=false')
     __logger.debug(f'Sending DELETE request to {url}')
 
-    if wait_for_response:
+    if wait_for_parent:
         res = httpx.delete(url)
         if res.status_code == 200:
             return {'success': True}
+        
         raise Exception(
             f'Could not delete key "{key}" from parent node due to error')
 

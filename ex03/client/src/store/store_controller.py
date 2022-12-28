@@ -107,12 +107,10 @@ def delete_item(key: str, wait_for_parent: bool = True):
 
     # Delete it in the parent node
     try:
-        _ = store_service.delete_key_in_parent(
-            key, wait_for_parent=wait_for_parent)
-    except Exception:
-        err = f'Failed to delete key {key} from parent node due to communication issues'
-        __logger.error(err)
-        raise HTTPException(status_code=503, detail=err)
+        _ = store_service.delete_key_in_parent(key, wait_for_parent=wait_for_parent)
+    except Exception as e:
+        __logger.error(f'Failed to delete key {key} in parent node: {e}')
+        raise HTTPException(status_code=503, detail=f'Failed to delete key {key} from parent node due to communication issues')
 
     return {'key': key}
 
