@@ -65,6 +65,6 @@ def register_node(parent_path: str = None):
 
 def get_paths():
     """
-    Returns all registered paths in the cluster.
+    DFS traversal of the cluster to get all the paths.
     """
-    # TODO get them paths
+    

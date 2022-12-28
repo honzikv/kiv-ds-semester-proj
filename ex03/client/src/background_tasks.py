@@ -19,7 +19,9 @@ def __run_tasks():
     """
     while not __terminate:
         try:
-            __message_queue.get()()
+            task = __message_queue.get()
+            __logger.debug(f'Processing new task: {task}')
+            task()
         except Exception as e:
             __logger.error(f'Failed to run task: {e}')
 

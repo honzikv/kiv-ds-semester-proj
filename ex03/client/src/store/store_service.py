@@ -10,6 +10,7 @@ from env import ROOT_NODE, NODE_NAME
 
 # Name of the parent node, None if this node is root
 __parent_node = None
+
 __logger = logging_factory.create_logger('parent_connector')
 
 
@@ -62,17 +63,19 @@ def put_key_in_parent(key: str, value: Any, wait_for_response: bool = False):
     """
 
     if __parent_node is None:
+        __logger.debug(f'There is no parent - this is a root node, skipping put key "{key}"')
         return {'success': True}
 
     if wait_for_response:
         res = httpx.put(f'http://{__parent_node}/store/{key}',
                         json={'key': key, 'value': value, '_wait_for_parent': False})
         if res.status_code == 200:
-            __logger.debug(f'Put key {key} in parent node {__parent_node}')
+            __logger.debug(f'Put key "{key}" in parent node {__parent_node}')
             return {'success': True}
         
+        __logger.error(f'Put request failed, got status code {res.status_code}')
         raise Exception(
-            f'Could not put key {key} in the parent node {__parent_node}')
+            f'Could not put key "{key}" in the parent node {__parent_node}')
 
     # Otherwise just send the request and return
     def put_in_background():
@@ -104,15 +107,15 @@ async def delete_key_in_parent(key: str, wait_for_response: bool = False):
             f'http://{__parent_node}/store/{key}?wait_for_parent=false')
         if res.status_code == 200:
             return {'success': True}
-        raise Exception('Could not delete key from parent node due to error')
+        raise Exception(f'Could not delete key "{key}" from parent node due to error')
     
     # Otherwise do it in the background
     async def delete_in_background():
         res = httpx.delete(
             f'http://{__parent_node}/store/{key}?wait_for_parent=false')
-        __logger.debug(f'Async delete key {key} in parent node {__parent_node}')
+        __logger.debug(f'Async delete key "{key}" in parent node {__parent_node} succeeded')
         if res.status_code != 200:
-            __logger.debug(f'Async delete key {key} in parent node {__parent_node} failed')
+            __logger.debug(f'Async delete key "{key}" in parent node {__parent_node} failed')
             
     background_tasks.add_task(delete_in_background)
     return {'success': True}

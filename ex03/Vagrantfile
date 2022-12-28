@@ -7,9 +7,9 @@ ENV['FORWARD_DOCKER_PORTS'] = '1'
 ENV['VAGRANT_EXPERIMENTAL'] = 'typed_triggers'
 
 # Install vagrant-docker-compose plugin
-unless Vagrant.has_plugin?("vagrant-docker-compose")
-    system("vagrant plugin install vagrant-docker-compose")
-    puts "Dependencies installed, please try the command again."
+unless Vagrant.has_plugin?('vagrant-docker-compose')
+    system('vagrant plugin install vagrant-docker-compose')
+    puts 'Dependencies installed, please try the command again.'
     exit
 end
 
@@ -37,7 +37,8 @@ API_PORT = 5000 # Port where the API is exposed
 ROOT_NODE_ID = 1 # ID of the root node - this is always indexed from 1
 ROOT_NODE = "#{NODE[:nameprefix]}#{ROOT_NODE_ID}"
 ZOOKEEPER_IP_ADDRESS = "#{SUBNET}#{NODE[:ip_offset]}"
-STARTUP_DELAY_SECS = 5
+STARTUP_DELAY_SECS = 1
+API_PORTS = (1..N_NODES).map { |i| API_PORT + i }
 # --------------------------------------------------------------------
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
@@ -47,11 +48,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         trigger.ruby do |env, machine|
             # Build zoonode image:
             puts 'Building Zoonode image:'
-            `docker build zoonode -t '#{ZOONODE_IMAGE}'`
+            `docker build zoonode -t "#{ZOONODE_IMAGE}"`
             
             # Build client node image:
             puts "Building client node image:"
-            `docker build client -t '#{CLIENT_IMAGE}'`
+            `docker build client -t "#{CLIENT_IMAGE}"`
         end
     end
 
@@ -69,10 +70,12 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         end
         s.vm.post_up_message = 'Zoonode is up and running. Access it with: vagrant ssh zoonode'
     end
-
-    API_PORTS = (1..N_NODES).map { |i| API_PORT + i }
+   
     # Nodes
     (1..N_NODES).each do |i|
+        # if i == ROOT_NODE_ID
+        #     next
+        # end
         node_ip_address = "#{SUBNET}#{NODE[:ip_offset] + i}"
         node_name = "#{NODE[:nameprefix]}#{i}"
         puts "Creating node #{node_name} with IP address #{node_ip_address}"

@@ -17,4 +17,5 @@ if os.environ['debug']:
     print(f'ROOT_NODE = {ROOT_NODE}')
     print(f'N_NODES = {N_NODES}')
     print(f'API_PORT = {API_PORT}')
-    print(f'STARTUP_DELAY = {STARTUP_DELAY}', flush=True)
+    print(f'STARTUP_DELAY = {STARTUP_DELAY}')
+    print(f'NODE_ADDRESS = {NODE_ADDRESS}', flush=True)
