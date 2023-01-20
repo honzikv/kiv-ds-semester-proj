@@ -71,11 +71,14 @@ Internally, all APIs run on port 5000.
 The API is documented using OpenAPI which is exposed on the
 `/docs` endpoint. For example, the documentation for the first node can be accessed here http://localhost:5001/docs.
 
+![](openapi.png)
+
+
 ## CLI application
 
 Additionally, the project contains a CLI application that can be 
 used to communicate with the nodes. This application can be run
-in docker container or on the host machine.
+in docker container or on the host machine (though it is necessary to install its dependencies via `pip install -r requirements.txt`)
 
 ### Usage
 
