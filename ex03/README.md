@@ -115,3 +115,11 @@ Note that in the dockerized version we need to run python using `python3.9` comm
 
 # Cache coherence
 
+Currently, the system is not cache coherent because the changes introduced to any node are
+only propagated upwards. To make it coherent it is necessary to propagate changes to all nodes
+somehow. 
+
+Arguably, for this application it makes the most sense to make the cache only eventually consistent - i.e. the system will be AP (available and partition tolerant). If we do not need strict consistency the cache can contain old values, and we can simply propagate new
+changes from the root node to all nodes periodically (e.g. every 1s or so). This could be a new endpoint of the node, that is only accessible to the root node to push all changes at once. The root node would
+then periodically call this endpoint on all nodes.
+
