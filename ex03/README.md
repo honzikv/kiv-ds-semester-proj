@@ -61,7 +61,7 @@ Alternatively, we can also use ssh to connect to the Docker container and
 communicate with the API via docker's network. To do so we need
 to use the 10.0.1.* address space or preferably the container's name. For example, to get the same response as above, we run:
 
-```
+```bash
 vagrant ssh NODE-1
 curl http://NODE-1:5000/
 ```
@@ -71,9 +71,9 @@ Internally, all APIs run on port 5000.
 ### OpenAPI Documentation
 
 The API is documented using OpenAPI which is exposed on the
-`/docs` endpoint. For example, the documentation for the first node can be accessed here http://localhost:5001/docs.
+`/docs` endpoint. For example, the documentation for the first node can be accessed here http://localhost:5001/docs while the documentation for the 4th node is at http://localhost:5004/docs.
 
-The root node always contains additional endpoints to check the structure of the tree and the nodes in the system. The OpenAPI page should look like this:
+The root node always contains additional endpoints to check the structure of the binary tree and the nodes in the system. The OpenAPI page should look like this:
 
 ![](openapi.png)
 
