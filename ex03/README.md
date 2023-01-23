@@ -24,7 +24,7 @@ that contacts the root node is assigned as the left child,
 the second as the right child, etc. The root node is the only node
 that is consistent in the system. After registering in the root node, each node also registers itself in the Zookeeper.
 
-# Data operations
+## Data operations
 
 There are three types of operations that can be performed on specific node:
 
