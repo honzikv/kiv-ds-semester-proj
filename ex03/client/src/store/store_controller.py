@@ -30,12 +30,6 @@ def get_item(key: str):
     """
     Returns the value of the key from the store. If the key is not present in the store,
     the request is propagated to the parent node recursively.
-
-    Args:
-        key (str): key to get
-
-    Returns:
-        json: with and "value" field
     """
     
     if key in __store:
@@ -65,13 +59,6 @@ def put_item(key: str, put_key_req: PutKeyRequest):
     """
     Puts key in the store. This is propagated to the parent node recursively.
     Uses PutKeyRequest to pass the value and whether to wait for parent response.
-
-    Args:
-        key (str): key to be put
-        put_key_req (PutKeyRequest): request body
-
-    Returns:
-        json: with "key" and "value" fields
     """
     
     # Update the value locally
@@ -93,13 +80,6 @@ def delete_item(key: str, wait_for_parent: bool = True):
     """
     Deletes key from the store. This is propagated to the parent node recursively.
     If wait_for_parent is set to False, the request is sent in the background.
-
-    Args:
-        key (str): key to be deleted
-        wait_for_parent (bool, optional): Whether to wait for parent response. Defaults to True.
-
-    Returns:
-        json: with key" field
     """
     
     # Update the value locally
@@ -119,8 +99,5 @@ def delete_item(key: str, wait_for_parent: bool = True):
 def get_all_items():
     """
     Returns all items in the store as json
-
-    Returns:
-        json: __store contents
     """
     return __store

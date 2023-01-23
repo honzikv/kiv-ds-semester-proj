@@ -4,7 +4,7 @@ This application is a simple implementation of distributed cache in a form of bi
 The app is built on Vagrant and Docker. The system contains a single Zookeeper node and N cache nodes that are simple key value
 stores. Each cache node is a separate Docker container that uses FastAPI to implement a REST API service and Kazoo to register in Zookeeper.
 
-Each node exposes said API on port 5000 (in Docker network). The API has several
+Each node exposes said API on port 5000 (inside Docker network). The API has several
 endpoints:
 
 - `/store` endpoint is used to perform operations on the store itself - GET, PUT, and DELETE
@@ -18,7 +18,7 @@ endpoints:
 # The infrastructure
 
 As previously mentioned, the nodes form a binary tree. This
-tree is kept both in Zookeeper and the root node. The application does not consider any nodes to fail. Apart from
+tree is kept both in Zookeeper and the root node. The application does not expect any nodes to fail. Apart from
 the root node, the tree is formed arbitrarily - first node
 that contacts the root node is assigned as the left child,
 second as the right child, etc. The root node is the only node
@@ -32,7 +32,7 @@ The application can be configured using `Vagrantfile`. We can configure followin
 
 - `ROOT_NODE_ID` - specifies id of the root node. The identifiers are indexed from 1 to N, where N is the number of nodes in the system. The default value is 1.
 
-- `STARTUP_DELAY` - specifies the delay between starting the nodes. The default value is 1 second. Root node is never delayed.
+- `STARTUP_DELAY` - specifies the delay between starting the nodes. The default value is 1 second. Root node should always start first.
 
 # Running the application
 
@@ -71,6 +71,7 @@ Internally, all APIs run on port 5000.
 The API is documented using OpenAPI which is exposed on the
 `/docs` endpoint. For example, the documentation for the first node can be accessed here http://localhost:5001/docs.
 
+The root node always contains additional endpoints to check the structure of the tree and the nodes in the system.
 ![](openapi.png)
 
 
@@ -116,10 +117,14 @@ Note that in the dockerized version we need to run python using `python3.9` comm
 # Cache coherence
 
 Currently, the system is not cache coherent because the changes introduced to any node are
-only propagated upwards. To make it coherent it is necessary to propagate changes to all nodes
-somehow. 
+only propagated upwards. 
+For example, if we have root node `NODE-1` and put a key-value pair `hello-world` to `NODE-6` and `hello-mars` to `NODE-7`. `NODE-1` and `NODE-7` will return `mars` but `NODE-6` will return `world` since no one updated it.
 
-Arguably, for this application it makes the most sense to make the cache only eventually consistent - i.e. the system will be AP (available and partition tolerant). If we do not need strict consistency the cache can contain old values, and we can simply propagate new
-changes from the root node to all nodes periodically (e.g. every 1s or so). This could be a new endpoint of the node, that is only accessible to the root node to push all changes at once. The root node would
-then periodically call this endpoint on all nodes.
+For this application we might want to make the cache eventually consistent - i.e. the system is going to be AP (available and partition tolerant). 
+
+If we do not require strict consistency, the cache can (at some point) contain old values, and we can simply propagate new
+changes from the root node to all nodes periodically (e.g. every 5s or so). This could be a new endpoint of the node (something like `/synchronize`), that is only accessible to the root node to push all changes at once. The root node would
+then periodically POST this endpoint on all nodes. 
+
+The main disvantage of this approach is that it is not very scalable - the more nodes we have, the more requests we need to make and the requests will contain large amounts of data.
 
