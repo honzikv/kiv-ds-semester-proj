@@ -17,12 +17,21 @@ endpoints:
 
 # The infrastructure
 
-As previously mentioned, the nodes form a binary tree. This
+As previously mentioned, the nodes form a binary tree (internally implemented as an array). This
 tree is kept both in Zookeeper and the root node. The application does not expect any nodes to fail. Apart from
-the root node, the tree is formed arbitrarily - first node
+the root node, the tree is formed arbitrarily - the first node
 that contacts the root node is assigned as the left child,
-second as the right child, etc. The root node is the only node
+the second as the right child, etc. The root node is the only node
 that is consistent in the system. After registering in the root node, each node also registers itself in the Zookeeper.
+
+# Data operations
+
+There are three types of operations that can be performed on specific node:
+
+- `GET` - gets the value of a key from the node's store, if the value is not present, it is fetched from the parent node (recursively)
+- `PUT` - puts a key-value pair in the node's store, this value is also propagated to the parent node (recursively)
+- `DELETE` - deletes a key from the node's store, this operation is also propagated to the parent node (recursively)
+
 
 ## Configuration
 
@@ -68,7 +77,7 @@ curl http://NODE-1:5000/
 
 Internally, all APIs run on port 5000.
 
-### OpenAPI Documentation
+## OpenAPI Documentation
 
 The API is documented using OpenAPI which is exposed on the
 `/docs` endpoint. For example, the documentation for the first node can be accessed here http://localhost:5001/docs while the documentation for the 4th node is at http://localhost:5004/docs.
@@ -96,7 +105,7 @@ To perform a request, we run:
 python cli.py [GET|PUT|DELETE] [NODE_ID] [KEY_OR_KEY_VALUE]
 ```
 
-Where `[GET|PUT|DELETE]` is a HTTP method, `NODE_ID` is the id of the node we want to communicate with (this can be either in format `NODE-{ID}` or just `{ID}` - e.g. both `NODE-7` and `7` are valid), and `KEY_OR_KEY_VALUE` is either a key or a key-value pair in format `KEY VALUE`.
+Where `[GET|PUT|DELETE]` is an HTTP method, `NODE_ID` is the id of the node we want to communicate with (this can be either in the format `NODE-{ID}` or just `{ID}` - e.g. both `NODE-7` and `7` are valid), and `KEY_OR_KEY_VALUE` is either a key or a key-value pair in format `KEY VALUE`.
 
 For example, to get the value of key `key1` from node `NODE-1`, we run:
 
@@ -129,7 +138,7 @@ python cli.py delete 4 hello
 
 ### Dockerized variant
 
-The Dockerized variant is run the exact same way, except that we need to use `python3.9` instead of `python`. Easiest way is to ssh to the vagrant machine and run the command from there:
+The Dockerized variant is run the exact same way, except that we need to use `python3.9` instead of `python`. The easiest way is to ssh to the vagrant machine and run the command from there:
 
 ```bash
 vagrant ssh cli
@@ -148,15 +157,13 @@ python3.9 cli.py put 6 hello world
 
 # Cache coherence
 
-Currently, the system is not cache coherent because the changes introduced to any node are
+Currently, the system is not cache-coherent because the changes introduced to any node are
 only propagated upwards. 
 For example, if we have root node `NODE-1` and put a key-value pair `hello-world` to `NODE-6` and `hello-mars` to `NODE-7`. `NODE-1` and `NODE-7` will return `mars` but `NODE-6` will return `world` since no one updated it.
 
-For this application we might want to make the cache eventually consistent - i.e. the system is going to be AP (available and partition tolerant). 
+For this application we might want to make the cache eventually consistent - i.e. the system is going to be AP (available and partition tolerant). The root node could for example keep a list of all changes made in the last time interval and then periodically push them to all nodes. This can be easily achieved by creating a new endpoint on each of the nodes (something like `/synchronize`) which only the root node has access to and POSTs changes every N seconds. 
 
-If we do not require strict consistency, the cache can (at some point) contain old values, and we can simply propagate new
-changes from the root node to all nodes periodically (e.g. every 5s or so). This could be a new endpoint of the node (something like `/synchronize`), that is only accessible to the root node to push all changes at once. The root node would
-then periodically POST this endpoint on all nodes. 
+Alternatively, if the network is small we could also broadcast the changes to all nodes whenever a write operation happens. This can be either achieved by simply POSTing to all other nodes from one node or delegating parent to do it when POST or DELETE is called in their API. Unfortunately, this method is not very scalable and generates much more requests than periodic synchronization.
 
-The main disvantage of this approach is that it is not very scalable - the more nodes we have, the more requests we need to make and the requests will contain large amounts of data.
+
 
