@@ -1,5 +1,7 @@
 # This simple module represents a datastore
 # For simplicity store is a dictionary
+# In a real world scenario we would separate the layers but since this
+# is a simple example we will keep it in one file
 
 import store.store_service as store_service
 import logging_factory
@@ -8,7 +10,6 @@ from fastapi import APIRouter, HTTPException
 from typing import Any
 from pydantic import BaseModel
 
-# Store is represented by a dictionary
 __store = {}
 
 __logger = logging_factory.create_logger(__name__)
@@ -43,14 +44,13 @@ def get_item(key: str):
         __logger.error(f'Failed to get key {key} from parent node: {e}')
         raise HTTPException(status_code=503, detail='Failed to get key from parent node due to communication issues')
 
-    # Update the key in the store
+    # Update the key in the store if not None and return it
     value = res['value']
-    __store[key] = value
-
-    # Return the value
     if value is not None:
+        __store[key] = value
         return {'value': value}
     
+    # Otherwise return 404 since there is no such value
     raise HTTPException(status_code=404, detail='Key not found')
 
 
@@ -83,7 +83,8 @@ def delete_item(key: str, wait_for_parent: bool = True):
     """
     
     # Update the value locally
-    __store.pop(key, None)
+    if key in __store:
+        del __store[key]
 
     # Delete it in the parent node
     try:

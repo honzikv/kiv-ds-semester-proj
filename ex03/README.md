@@ -4,7 +4,7 @@ This application is a simple implementation of distributed cache in a form of bi
 The app is built on Vagrant and Docker. The system contains a single Zookeeper node and N cache nodes that are simple key value
 stores. Each cache node is a separate Docker container that uses FastAPI to implement a REST API service and Kazoo to register in Zookeeper.
 
-Each node exposes said API on port 5000 (inside Docker network). The API has several
+Each node exposes said API on port 5000 (inside Docker network) which other nodes communicate through. The API has several
 endpoints:
 
 - `/store` endpoint is used to perform operations on the store itself - GET, PUT, and DELETE
@@ -71,7 +71,8 @@ Internally, all APIs run on port 5000.
 The API is documented using OpenAPI which is exposed on the
 `/docs` endpoint. For example, the documentation for the first node can be accessed here http://localhost:5001/docs.
 
-The root node always contains additional endpoints to check the structure of the tree and the nodes in the system.
+The root node always contains additional endpoints to check the structure of the tree and the nodes in the system. The OpenAPI page should look like this:
+
 ![](openapi.png)
 
 
@@ -79,40 +80,69 @@ The root node always contains additional endpoints to check the structure of the
 
 Additionally, the project contains a CLI application that can be 
 used to communicate with the nodes. This application can be run
-in docker container or on the host machine (though it is necessary to install its dependencies via `pip install -r requirements.txt`)
+in docker container or on the host machine (though it is necessary to install its dependencies via `pip install -r requirements.txt`).
+
 
 ### Usage
 
-To run the CLI application, we need to have Python 3.9+ installed and two dependencies: `fire` and `httpx` which can
+To run the CLI application, we need to have Python 3.9+ setup and two dependencies: `fire` and `httpx` which can
 be installed via `requirements.txt` file in the `cli` directory, or are installed automatically in the Docker container.
 
 To perform a request, we run:
 
-```zsh
+```bash
 python cli.py [GET|PUT|DELETE] [NODE_ID] [KEY_OR_KEY_VALUE]
 ```
 
-Where `[GET|PUT|DELETE]` is a HTTP method, `NODE_ID` is the id of the node we want to communicate with (this can be either in format `NODE-{ID}` or just `{ID}`), and `KEY_OR_KEY_VALUE` is either a key or a key-value pair in format `KEY VALUE`.
+Where `[GET|PUT|DELETE]` is a HTTP method, `NODE_ID` is the id of the node we want to communicate with (this can be either in format `NODE-{ID}` or just `{ID}` - e.g. both `NODE-7` and `7` are valid), and `KEY_OR_KEY_VALUE` is either a key or a key-value pair in format `KEY VALUE`.
 
 For example, to get the value of key `key1` from node `NODE-1`, we run:
 
-```zsh
-python cli.py GET NODE-1 key1
+```bash
+python cli.py get NODE-1 key1
 ```
 
 To put a key-value pair `key1 value1` in node `NODE-1`, we run:
 
-```zsh
-python cli.py PUT NODE-1 key1 value1
+```bash
+python cli.py put NODE-1 key1 value1
 ```
 
 And finally, to delete the key `key1` from node `NODE-1`, we run:
 
-```zsh
-python cli.py DELETE NODE-1 key1
+```bash
+python cli.py delete NODE-1 key1
 ```
 
-Note that in the dockerized version we need to run python using `python3.9` command instead.
+The application always prints returned JSON response and the status
+code of the request. E.g.
+
+```bash
+python cli.py put 4 hello world
+200 {'key': 'hello', 'value': 'world'}
+
+python cli.py delete 4 hello
+200 {'key': 'hello'}
+```
+
+### Dockerized variant
+
+The Dockerized variant is run the exact same way, except that we need to use `python3.9` instead of `python`. Easiest way is to ssh to the vagrant machine and run the command from there:
+
+```bash
+vagrant ssh cli
+```
+
+Both the CLI script and runtime are located in the opt folder:
+
+```bash
+cd /opt
+```
+Then we can run the CLI application as described above. e.g.
+
+```bash
+python3.9 cli.py put 6 hello world
+```
 
 # Cache coherence
 

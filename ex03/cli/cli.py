@@ -58,11 +58,7 @@ def put(node: str, key: str, value: Union[str, int, float, bool]):
     try:
         node_url = build_node_url(node)
         res = httpx.put(f'{node_url}/store/{key}', json={'value': value})
-
-        if res.status_code != 200:
-            print(f'Error: {res.status_code} {res.json()}')
-        else:
-            print(res.json())
+        print(f'{res.status_code} {res.json()}')
 
     except Exception as e:
         print(e)
@@ -80,11 +76,7 @@ def get(node: str, key: str):
     try:
         node_url = build_node_url(node)
         res = httpx.get(f'{node_url}/store/{key}')
-
-        if res.status_code != 200:
-            print(f'Error: {res.status_code} {res.json()}')
-        else:
-            print(res.json())
+        print(f'{res.status_code} {res.json()}')
 
     except Exception as e:
         print(e)
@@ -102,11 +94,7 @@ def delete(node: str, key: str):
     try:
         node_url = build_node_url(node)
         res = httpx.delete(f'{node_url}/store/{key}')
-
-        if res.status_code != 200:
-            print(f'Error: {res.status_code} {res.json()}')
-        else:
-            print(res.json())
+        print(f'{res.status_code} {res.json()}')
 
     except Exception as e:
         print(e)
@@ -116,6 +104,9 @@ def delete(node: str, key: str):
 if __name__ == '__main__':
     fire.Fire({
         'put': put,
+        'PUT': put,
         'get': get,
+        'GET': get,
         'delete': delete,
+        'DELETE': delete,
     })
