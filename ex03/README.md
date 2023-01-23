@@ -44,10 +44,12 @@ To run the application, we need to have Vagrant and Docker installed. Then in th
 Each node exposes its API port on the host machine depending on
 its id. By default, the first node (NODE-1) starts on port 5001 (NODE-2 would be on port 5002, etc.) - i.e. it can be accessed like so:
 
-`curl http://localhost:5001/`
+```bash
+curl http://localhost:5001/
+```
 
 Which will give us the following json:
-```
+```json
 {
     "status": "alive",
     "node": "NODE-1",
